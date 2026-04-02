@@ -27,6 +27,7 @@ Kivo is a lightweight cross-platform HTTP client designed for developers who val
 - Comprehensive Method Support: Full support for GET, POST, PUT, PATCH, DELETE, HEAD, and OPTIONS
 - GraphQL Support: Built-in query and variable editors for GraphQL APIs
 - History Tracking: Automatically keep track of your previous requests and responses
+- File Explorer Integration: Quickly open the local data directory directly from the sidebar
 - Security: Secure local storage for your workspaces and request data
 
 ## Getting Started

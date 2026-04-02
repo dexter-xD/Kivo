@@ -58,8 +58,8 @@ jobs:
             Debian / Ubuntu
             Use the following commands to download and install the .deb package directly from your terminal:
             ```bash
-            wget https://github.com/dexter-xD/Kivo/releases/download/${{ github.ref_name }}/kivo_0.1.0_amd64.deb
-            sudo dpkg -i kivo_0.1.0_amd64.deb
+            wget https://github.com/dexter-xD/Kivo/releases/download/${{ github.ref_name }}/kivo_0.1.1_amd64.deb
+            sudo dpkg -i kivo_0.1.1_amd64.deb
             sudo apt-get install -f # Fix any missing dependencies
             ```
 

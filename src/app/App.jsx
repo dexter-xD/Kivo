@@ -120,7 +120,7 @@ export default function App() {
 
   const activeWorkspace = useMemo(() => getActiveWorkspace(store), [store]);
   const activeRequest = useMemo(() => getActiveRequest(store), [store]);
-  const version = "0.1.0";
+  const version = "0.1.1";
   const requestTabs = useMemo(() => {
     if (!activeWorkspace) {
       return [];
@@ -745,7 +745,7 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="mr-1 text-[10px] font-medium text-muted-foreground lg:text-[11px]">v{version}-beta</span>
+              <span className="mr-1 text-[10px] font-medium text-muted-foreground lg:text-[11px]">v{version}</span>
               <Button
                 variant="outline"
                 size="sm"

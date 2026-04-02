@@ -1,6 +1,6 @@
 [package]
 name = "kivo"
-version = "0.1.0"
+version = "0.1.1"
 description = "A minimal cross-platform HTTP client built with Rust and Tauri for fast and simple API testing."
 authors = ["dexter-xD"]
 license = "MIT"
