@@ -1,23 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { invoke } from "@tauri-apps/api/core";
 
 import { loadAppState, saveAppState, sendHttpRequest } from "@/lib/http-client.js";
 import { buildRequestPayload, buildUrlWithParams, serializeHeaders } from "@/lib/http-ui.js";
 import {
   cloneRequest,
+  createCollection,
   createDefaultStore,
   createEmptyResponse,
-  createId,
   createRequest,
   createWorkspace,
   formatSavedAt,
+  getActiveCollection,
   getActiveRequest,
   getActiveWorkspace,
-  normalizeRequestRecord,
+  getUniqueName,
   orderRequests
 } from "@/lib/workspace-store.js";
 import { clampSidebarWidth, normalizeStore, parseCookies } from "@/lib/workspace-utils.js";
 import { formatResponseBody, isJsonText } from "@/lib/formatters.js";
+import { normalizeUrl } from "@/lib/http-ui.js";
 
 const SIDEBAR_COLLAPSED_WIDTH = 52;
 const SIDEBAR_MIN_WIDTH = 220;
@@ -27,20 +30,36 @@ export function useWorkspaceStore() {
   const [store, setStore] = useState(createDefaultStore());
   const [isSending, setIsSending] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [isSetupComplete, setIsSetupComplete] = useState(true);
   const [starCount, setStarCount] = useState(null);
   const saveTimerRef = useRef(null);
   const resizeRef = useRef({ active: false, startX: 0, startWidth: 304 });
 
+  useEffect(() => {
+    async function checkSetup() {
+      try {
+        const config = await invoke("get_app_config");
+        setIsSetupComplete(!!config.storagePath);
+      } catch (error) {
+        console.error("Failed to check setup status:", error);
+      }
+    }
+    checkSetup();
+  }, []);
+
   const activeWorkspace = useMemo(() => getActiveWorkspace(store), [store]);
+  const activeCollection = useMemo(() => getActiveCollection(store), [store]);
   const activeRequest = useMemo(() => getActiveRequest(store), [store]);
+
   const requestTabs = useMemo(() => {
-    if (!activeWorkspace) {
+    if (!activeCollection) {
       return [];
     }
 
-    const openIds = new Set(activeWorkspace.openRequestIds || []);
-    return activeWorkspace.requests.filter((request) => openIds.has(request.id));
-  }, [activeWorkspace]);
+    const openNames = new Set(activeCollection.openRequestNames || []);
+    return activeCollection.requests.filter((request) => openNames.has(request.name));
+  }, [activeCollection]);
+
   const response = activeRequest?.lastResponse ?? createEmptyResponse();
 
   useEffect(() => {
@@ -60,6 +79,7 @@ export function useWorkspaceStore() {
   }, []);
 
   useEffect(() => {
+    if (!isSetupComplete) return;
     let cancelled = false;
 
     async function hydrate() {
@@ -85,7 +105,7 @@ export function useWorkspaceStore() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isSetupComplete]);
 
   useEffect(() => {
     function handleMove(event) {
@@ -159,18 +179,27 @@ export function useWorkspaceStore() {
     updateStore((current) => ({
       ...current,
       workspaces: current.workspaces.map((workspace) => {
-        if (workspace.id !== current.activeWorkspaceId) {
+        if (workspace.name !== current.activeWorkspaceName) {
           return workspace;
         }
 
         return {
           ...workspace,
-          requests: workspace.requests.map((request) => {
-            if (request.id !== current.activeRequestId) {
-              return request;
+          collections: workspace.collections.map((collection) => {
+            if (collection.name !== current.activeCollectionName) {
+              return collection;
             }
 
-            return typeof updater === "function" ? updater(request) : { ...request, ...updater };
+            return {
+              ...collection,
+              requests: collection.requests.map((request) => {
+                if (request.name !== current.activeRequestName) {
+                  return request;
+                }
+
+                return typeof updater === "function" ? updater(request) : { ...request, ...updater };
+              })
+            };
           })
         };
       })
@@ -182,244 +211,475 @@ export function useWorkspaceStore() {
   }
 
   function createWorkspaceRecord(values) {
-    const workspace = createWorkspace(values.name, values.description);
-
-    updateStore((current) => ({
-      ...current,
-      activeWorkspaceId: workspace.id,
-      activeRequestId: "",
-      sidebarTab: "requests",
-      workspaces: [...current.workspaces, workspace]
-    }));
-  }
-
-  function renameWorkspaceRecord(workspaceId, values) {
-    updateStore((current) => ({
-      ...current,
-      workspaces: current.workspaces.map((workspace) =>
-        workspace.id === workspaceId ? { ...workspace, name: values.name, description: values.description } : workspace
-      )
-    }));
-  }
-
-  function deleteWorkspaceRecord(workspaceId) {
     updateStore((current) => {
-      const nextWorkspaces = current.workspaces.filter((workspace) => workspace.id !== workspaceId);
-      const nextWorkspace = nextWorkspaces.find((workspace) => workspace.id === current.activeWorkspaceId && workspace.id !== workspaceId) ?? nextWorkspaces[0] ?? null;
-      const nextRequest = nextWorkspace?.requests?.[0] ?? null;
+      const existingNames = current.workspaces.map(w => w.name);
+      const uniqueName = getUniqueName(values.name || "New Workspace", existingNames);
+      const workspace = createWorkspace(uniqueName, values.description);
 
       return {
         ...current,
-        activeWorkspaceId: nextWorkspace?.id ?? "",
-        activeRequestId: nextRequest?.id ?? "",
-        workspaces: nextWorkspaces
-      };
-    });
-  }
-
-  function createRequestRecord(workspaceId) {
-    if (!workspaceId) {
-      return;
-    }
-
-    const nextRequest = createRequest();
-
-    updateStore((current) => ({
-      ...current,
-      activeWorkspaceId: workspaceId,
-      activeRequestId: nextRequest.id,
-      sidebarTab: "requests",
-      workspaces: current.workspaces.map((workspace) =>
-        workspace.id === workspaceId
-          ? {
-            ...workspace,
-            requests: orderRequests([...workspace.requests, nextRequest]),
-            openRequestIds: [...(Array.isArray(workspace.openRequestIds) ? workspace.openRequestIds : []), nextRequest.id]
-          }
-          : workspace
-      )
-    }));
-  }
-
-  function duplicateRequestRecord(workspaceId, requestId) {
-    updateStore((current) => {
-      let duplicatedRequestId = current.activeRequestId;
-
-      const nextWorkspaces = current.workspaces.map((workspace) => {
-        if (workspace.id !== workspaceId) {
-          return workspace;
-        }
-
-        const sourceRequest = workspace.requests.find((request) => request.id === requestId);
-
-        if (!sourceRequest) {
-          return workspace;
-        }
-
-        const duplicated = cloneRequest(sourceRequest);
-        duplicatedRequestId = duplicated.id;
-
-        return {
-          ...workspace,
-          requests: orderRequests([...workspace.requests, duplicated]),
-          openRequestIds: [...(Array.isArray(workspace.openRequestIds) ? workspace.openRequestIds : []), duplicated.id]
-        };
-      });
-
-      return {
-        ...current,
-        activeWorkspaceId: workspaceId,
-        activeRequestId: duplicatedRequestId,
-        workspaces: nextWorkspaces
-      };
-    });
-  }
-
-  function renameRequestRecord(workspaceId, requestId, name) {
-    updateStore((current) => ({
-      ...current,
-      workspaces: current.workspaces.map((workspace) =>
-        workspace.id === workspaceId
-          ? {
-            ...workspace,
-            requests: workspace.requests.map((request) =>
-              request.id === requestId ? { ...request, name } : request
-            ),
-            history: workspace.history.map((entry) =>
-              entry.requestId === requestId ? { ...entry, requestName: name } : entry
-            )
-          }
-          : workspace
-      )
-    }));
-  }
-
-  function deleteRequestRecord(workspaceId, requestId) {
-    updateStore((current) => {
-      let nextActiveRequestId = current.activeRequestId;
-
-      const nextWorkspaces = current.workspaces.map((workspace) => {
-        if (workspace.id !== workspaceId) {
-          return workspace;
-        }
-
-        const nextRequests = workspace.requests.filter((request) => request.id !== requestId);
-        const nextOpenIds = (workspace.openRequestIds || []).filter((id) => id !== requestId);
-
-        if (current.activeRequestId === requestId) {
-          nextActiveRequestId = nextOpenIds[0] ?? "";
-        }
-
-        return {
-          ...workspace,
-          requests: nextRequests,
-          openRequestIds: nextOpenIds,
-          history: workspace.history.filter((entry) => entry.requestId !== requestId)
-        };
-      });
-
-      return {
-        ...current,
-        activeWorkspaceId: workspaceId,
-        activeRequestId: nextActiveRequestId,
-        workspaces: nextWorkspaces
-      };
-    });
-  }
-
-  function selectWorkspace(workspaceId) {
-    updateStore((current) => {
-      const workspace = current.workspaces.find((item) => item.id === workspaceId) ?? current.workspaces[0] ?? null;
-      const firstRequest = workspace?.requests?.[0] ?? null;
-      const openIds = workspace?.openRequestIds || [];
-      const nextOpenIds = firstRequest && !openIds.includes(firstRequest.id) ? [...openIds, firstRequest.id] : openIds;
-
-      return {
-        ...current,
-        activeWorkspaceId: workspace?.id ?? "",
-        activeRequestId: firstRequest?.id ?? "",
+        activeWorkspaceName: workspace.name,
+        activeCollectionName: "",
+        activeRequestName: "",
         sidebarTab: "requests",
-        workspaces: current.workspaces.map((ws) =>
-          ws.id === workspace?.id ? { ...ws, openRequestIds: nextOpenIds } : ws
+        workspaces: [...current.workspaces, workspace]
+      };
+    });
+  }
+
+  function renameWorkspaceRecord(oldName, values) {
+    updateStore((current) => {
+      const nextName = values.name.trim();
+      if (!nextName) return current;
+
+
+      if (nextName !== oldName) {
+        const existingNames = current.workspaces.map(w => w.name);
+        if (existingNames.includes(nextName)) {
+
+          return current;
+        }
+      }
+
+      return {
+        ...current,
+        activeWorkspaceName: current.activeWorkspaceName === oldName ? nextName : current.activeWorkspaceName,
+        workspaces: current.workspaces.map((workspace) =>
+          workspace.name === oldName ? { ...workspace, name: nextName, description: values.description } : workspace
         )
       };
     });
   }
 
-  function selectRequest(workspaceId, requestId) {
-    updateStore((current) => ({
-      ...current,
-      activeWorkspaceId: workspaceId,
-      activeRequestId: requestId,
-      sidebarTab: "requests",
-      workspaces: current.workspaces.map((workspace) => {
-        if (workspace.id !== workspaceId) {
-          return workspace;
-        }
-
-        const openIds = Array.isArray(workspace.openRequestIds) ? workspace.openRequestIds : [];
-
-        if (openIds.includes(requestId)) {
-          return workspace;
-        }
-
-        return {
-          ...workspace,
-          openRequestIds: [...openIds, requestId]
-        };
-      })
-    }));
-  }
-
-  function togglePinRequestRecord(workspaceId, requestId) {
-    updateStore((current) => ({
-      ...current,
-      activeWorkspaceId: workspaceId,
-      activeRequestId: requestId,
-      sidebarTab: "requests",
-      workspaces: current.workspaces.map((workspace) =>
-        workspace.id === workspaceId
-          ? {
-            ...workspace,
-            requests: orderRequests(
-              workspace.requests.map((request) =>
-                request.id === requestId ? { ...request, pinned: !request.pinned } : request
-              )
-            )
-          }
-          : workspace
-      )
-    }));
-  }
-
-  function closeRequestTab(requestId) {
-    if (!activeWorkspace) {
-      return;
-    }
-
+  function deleteWorkspaceRecord(name) {
     updateStore((current) => {
-      let nextActiveRequestId = current.activeRequestId;
+      const nextWorkspaces = current.workspaces.filter((workspace) => workspace.name !== name);
+      const nextWorkspace = nextWorkspaces.find((workspace) => workspace.name === current.activeWorkspaceName && workspace.name !== name) ?? nextWorkspaces[0] ?? null;
+      const nextCollection = nextWorkspace?.collections?.[0] ?? null;
+      const nextRequest = nextCollection?.requests?.[0] ?? null;
+
+      return {
+        ...current,
+        activeWorkspaceName: nextWorkspace?.name ?? "",
+        activeCollectionName: nextCollection?.name ?? "",
+        activeRequestName: nextRequest?.name ?? "",
+        workspaces: nextWorkspaces
+      };
+    });
+  }
+
+  function createCollectionRecord(workspaceName, name) {
+    updateStore((current) => {
+      const workspace = current.workspaces.find(w => w.name === workspaceName);
+      if (!workspace) return current;
+
+      const existingNames = workspace.collections.map(c => c.name);
+      const uniqueName = getUniqueName(name || "New Collection", existingNames);
+      const nextCollection = createCollection(uniqueName);
+
+      return {
+        ...current,
+        activeWorkspaceName: workspaceName,
+        activeCollectionName: uniqueName,
+        activeRequestName: "",
+        workspaces: current.workspaces.map((w) =>
+          w.name === workspaceName
+            ? { ...w, collections: [...w.collections, nextCollection] }
+            : w
+        )
+      };
+    });
+  }
+
+  function renameCollectionRecord(workspaceName, oldName, newName) {
+    updateStore((current) => {
+      const nextName = newName.trim();
+      if (!nextName) return current;
+
+      if (nextName !== oldName) {
+        const workspace = current.workspaces.find(w => w.name === workspaceName);
+        if (workspace?.collections.some(c => c.name === nextName)) {
+          return current;
+        }
+      }
+
+      return {
+        ...current,
+        activeCollectionName: current.activeCollectionName === oldName ? nextName : current.activeCollectionName,
+        workspaces: current.workspaces.map((workspace) =>
+          workspace.name === workspaceName
+            ? {
+              ...workspace,
+              collections: workspace.collections.map((c) =>
+                c.name === oldName ? { ...c, name: nextName } : c
+              )
+            }
+            : workspace
+        )
+      };
+    });
+  }
+
+  function deleteCollectionRecord(workspaceName, name) {
+    updateStore((current) => {
+      let nextActiveCollectionName = current.activeCollectionName;
+      let nextActiveRequestName = current.activeRequestName;
 
       const nextWorkspaces = current.workspaces.map((workspace) => {
-        if (workspace.id !== activeWorkspace.id) {
+        if (workspace.name !== workspaceName) {
           return workspace;
         }
 
-        const nextOpenIds = (workspace.openRequestIds || []).filter((id) => id !== requestId);
-
-        if (current.activeRequestId === requestId) {
-          nextActiveRequestId = nextOpenIds[0] ?? "";
+        const nextCollections = workspace.collections.filter((c) => c.name !== name);
+        if (current.activeCollectionName === name) {
+          nextActiveCollectionName = nextCollections[0]?.name ?? "";
+          nextActiveRequestName = nextCollections[0]?.requests?.[0]?.name ?? "";
         }
+
+        return { ...workspace, collections: nextCollections };
+      });
+
+      return {
+        ...current,
+        activeCollectionName: nextActiveCollectionName,
+        activeRequestName: nextActiveRequestName,
+        workspaces: nextWorkspaces
+      };
+    });
+  }
+
+  function duplicateCollectionRecord(workspaceName, collectionName, newName) {
+    updateStore((current) => {
+      let duplicatedName = "";
+      const nextWorkspaces = current.workspaces.map((workspace) => {
+        if (workspace.name !== workspaceName) return workspace;
+        const source = workspace.collections.find((c) => c.name === collectionName);
+        if (!source) return workspace;
+
+        const existingNames = workspace.collections.map((c) => c.name);
+        const uniqueName = newName ? newName.trim() : getUniqueName(`${source.name} Copy`, existingNames);
+        if (newName && existingNames.includes(uniqueName)) return workspace;
+
+        const duplicated = {
+          ...source,
+          name: uniqueName,
+          requests: source.requests.map(r => cloneRequest(r))
+        };
+        duplicatedName = duplicated.name;
 
         return {
           ...workspace,
-          openRequestIds: nextOpenIds
+          collections: [...workspace.collections, duplicated]
         };
       });
 
       return {
         ...current,
-        activeRequestId: nextActiveRequestId,
+        activeCollectionName: duplicatedName || current.activeCollectionName,
+        workspaces: nextWorkspaces
+      };
+    });
+  }
+
+  function createRequestRecord(workspaceName, collectionName, name) {
+    updateStore((current) => {
+      const targetWorkspaceName = workspaceName || current.activeWorkspaceName;
+      const workspace = current.workspaces.find(w => w.name === targetWorkspaceName);
+      
+
+      const targetCollectionName = collectionName || current.activeCollectionName || workspace?.collections?.[0]?.name;
+
+      if (!targetCollectionName) {
+        console.warn("Cannot create request: no collection found in workspace", targetWorkspaceName);
+        return current;
+      }
+
+      const collection = workspace.collections.find(c => c.name === targetCollectionName);
+      const existingNames = collection?.requests.map(r => r.name) || [];
+      const uniqueName = name ? name.trim() : getUniqueName("New Request", existingNames);
+      
+      if (name && existingNames.includes(uniqueName)) {
+        return current;
+      }
+      
+      const nextRequest = createRequest(uniqueName);
+
+      return {
+        ...current,
+        activeWorkspaceName: targetWorkspaceName,
+        activeCollectionName: targetCollectionName,
+        activeRequestName: nextRequest.name,
+        workspaces: current.workspaces.map((workspace) => {
+          if (workspace.name !== targetWorkspaceName) return workspace;
+          return {
+            ...workspace,
+            collections: workspace.collections.map((collection) => {
+              if (collection.name !== targetCollectionName) return collection;
+              return {
+                ...collection,
+                requests: orderRequests([...collection.requests, nextRequest]),
+                openRequestNames: [...(collection.openRequestNames || []), nextRequest.name]
+              };
+            })
+          };
+        })
+      };
+    });
+  }
+
+  function duplicateRequestRecord(workspaceName, collectionName, requestName, newName) {
+    updateStore((current) => {
+      let duplicatedName = "";
+
+      const nextWorkspaces = current.workspaces.map((workspace) => {
+        if (workspace.name !== workspaceName) return workspace;
+        return {
+          ...workspace,
+          collections: workspace.collections.map((collection) => {
+            if (collection.name !== collectionName) return collection;
+            const source = collection.requests.find((r) => r.name === requestName);
+            if (!source) return collection;
+
+            const existingNames = collection.requests.map(r => r.name);
+            const uniqueName = newName ? newName.trim() : getUniqueName(`${source.name} Copy`, existingNames);
+            if (newName && existingNames.includes(uniqueName)) return collection;
+
+            const duplicated = cloneRequest({ ...source, name: uniqueName });
+            duplicatedName = duplicated.name;
+
+            return {
+              ...collection,
+              requests: orderRequests([...collection.requests, duplicated]),
+              openRequestNames: [...(collection.openRequestNames || []), duplicated.name]
+            };
+          })
+        };
+      });
+
+      return {
+        ...current,
+        activeRequestName: duplicatedName || current.activeRequestName,
+        workspaces: nextWorkspaces
+      };
+    });
+  }
+
+  function pasteRequestRecord(workspaceName, collectionName, request) {
+    updateStore((current) => {
+      const targetWorkspaceName = workspaceName || current.activeWorkspaceName;
+      const workspace = current.workspaces.find(w => w.name === targetWorkspaceName);
+      const targetCollectionName = collectionName || current.activeCollectionName || workspace?.collections?.[0]?.name;
+
+      if (!targetCollectionName) return current;
+
+      const collection = workspace.collections.find(c => c.name === targetCollectionName);
+      const existingNames = collection?.requests.map(r => r.name) || [];
+      const uniqueName = getUniqueName(request.name, existingNames);
+
+      const pastedRequest = cloneRequest({ ...request, name: uniqueName });
+
+      return {
+        ...current,
+        activeWorkspaceName: targetWorkspaceName,
+        activeCollectionName: targetCollectionName,
+        activeRequestName: pastedRequest.name,
+        workspaces: current.workspaces.map((w) => {
+          if (w.name !== targetWorkspaceName) return w;
+          return {
+            ...w,
+            collections: w.collections.map((c) => {
+              if (c.name !== targetCollectionName) return c;
+              return {
+                ...c,
+                requests: orderRequests([...c.requests, pastedRequest]),
+                openRequestNames: [...(c.openRequestNames || []), pastedRequest.name]
+              };
+            })
+          };
+        })
+      };
+    });
+  }
+
+  function renameRequestRecord(workspaceName, collectionName, oldName, nextName) {
+    updateStore((current) => {
+      const targetName = nextName.trim();
+      if (!targetName) return current;
+
+      if (targetName !== oldName) {
+        const workspace = current.workspaces.find(w => w.name === workspaceName);
+        const collection = workspace?.collections.find(c => c.name === collectionName);
+        if (collection?.requests.some(r => r.name === targetName)) {
+          return current;
+        }
+      }
+
+      return {
+        ...current,
+        activeRequestName: current.activeRequestName === oldName ? targetName : current.activeRequestName,
+        workspaces: current.workspaces.map((workspace) => {
+          if (workspace.name !== workspaceName) return workspace;
+          return {
+            ...workspace,
+            collections: workspace.collections.map((collection) => {
+              if (collection.name !== collectionName) return collection;
+              return {
+                ...collection,
+                requests: collection.requests.map((r) =>
+                  r.name === oldName ? { ...r, name: targetName } : r
+                ),
+                openRequestNames: (collection.openRequestNames || []).map((n) => n === oldName ? targetName : n)
+              };
+            })
+          };
+        })
+      };
+    });
+  }
+
+  function deleteRequestRecord(workspaceName, collectionName, requestName) {
+    updateStore((current) => {
+      let nextActiveRequestName = current.activeRequestName;
+
+      const nextWorkspaces = current.workspaces.map((workspace) => {
+        if (workspace.name !== workspaceName) return workspace;
+        return {
+          ...workspace,
+          collections: workspace.collections.map((collection) => {
+            if (collection.name !== collectionName) return collection;
+            const nextRequests = collection.requests.filter((r) => r.name !== requestName);
+            const nextOpenNames = (collection.openRequestNames || []).filter((n) => n !== requestName);
+
+            if (current.activeRequestName === requestName) {
+              nextActiveRequestName = nextOpenNames[0] ?? "";
+            }
+
+            return {
+              ...collection,
+              requests: nextRequests,
+              openRequestNames: nextOpenNames
+            };
+          })
+        };
+      });
+
+      return {
+        ...current,
+        activeRequestName: nextActiveRequestName,
+        workspaces: nextWorkspaces
+      };
+    });
+  }
+
+  function selectWorkspace(name) {
+    updateStore((current) => {
+      const workspace = current.workspaces.find((w) => w.name === name) ?? current.workspaces[0] ?? null;
+      const firstCol = workspace?.collections?.[0] ?? null;
+      const firstReq = firstCol?.requests?.[0] ?? null;
+
+      return {
+        ...current,
+        activeWorkspaceName: workspace?.name ?? "",
+        activeCollectionName: firstCol?.name ?? "",
+        activeRequestName: firstReq?.name ?? "",
+        sidebarTab: "requests",
+        workspaces: current.workspaces.map((w) => {
+          if (w.name !== workspace?.name || !firstCol || !firstReq) return w;
+          return {
+            ...w,
+            collections: w.collections.map((c) => {
+              if (c.name !== firstCol.name) return c;
+              const openNames = Array.isArray(c.openRequestNames) ? c.openRequestNames : [];
+              if (openNames.includes(firstReq.name)) return c;
+              return { ...c, openRequestNames: [...openNames, firstReq.name] };
+            })
+          };
+        })
+      };
+    });
+  }
+
+  function selectCollection(workspaceName, collectionName) {
+    updateStore((current) => ({
+      ...current,
+      activeWorkspaceName: workspaceName,
+      activeCollectionName: collectionName,
+      activeRequestName: ""
+    }));
+  }
+
+  function selectRequest(workspaceName, collectionName, requestName) {
+    updateStore((current) => ({
+      ...current,
+      activeWorkspaceName: workspaceName,
+      activeCollectionName: collectionName,
+      activeRequestName: requestName,
+      sidebarTab: "requests",
+      workspaces: current.workspaces.map((workspace) => {
+        if (workspace.name !== workspaceName) return workspace;
+        return {
+          ...workspace,
+          collections: workspace.collections.map((collection) => {
+            if (collection.name !== collectionName) return collection;
+            const openNames = Array.isArray(collection.openRequestNames) ? collection.openRequestNames : [];
+            if (openNames.includes(requestName)) return collection;
+            return {
+              ...collection,
+              openRequestNames: [...openNames, requestName]
+            };
+          })
+        };
+      })
+    }));
+  }
+
+  function togglePinRequestRecord(workspaceName, collectionName, requestName) {
+    updateStore((current) => ({
+      ...current,
+      workspaces: current.workspaces.map((workspace) => {
+        if (workspace.name !== workspaceName) return workspace;
+        return {
+          ...workspace,
+          collections: workspace.collections.map((collection) => {
+            if (collection.name !== collectionName) return collection;
+            return {
+              ...collection,
+              requests: orderRequests(
+                collection.requests.map((r) =>
+                  r.name === requestName ? { ...r, pinned: !r.pinned } : r
+                )
+              )
+            };
+          })
+        };
+      })
+    }));
+  }
+
+  function closeRequestTab(requestName) {
+    if (!activeCollection) return;
+
+    updateStore((current) => {
+      let nextActiveRequestName = current.activeRequestName;
+
+      const nextWorkspaces = current.workspaces.map((workspace) => {
+        if (workspace.name !== current.activeWorkspaceName) return workspace;
+        return {
+          ...workspace,
+          collections: workspace.collections.map((collection) => {
+            if (collection.name !== current.activeCollectionName) return collection;
+            const nextOpenNames = (collection.openRequestNames || []).filter((n) => n !== requestName);
+            if (current.activeRequestName === requestName) {
+              nextActiveRequestName = nextOpenNames[0] ?? "";
+            }
+            return { ...collection, openRequestNames: nextOpenNames };
+          })
+        };
+      });
+
+      return {
+        ...current,
+        activeRequestName: nextActiveRequestName,
         workspaces: nextWorkspaces
       };
     });
@@ -475,29 +735,31 @@ export function useWorkspaceStore() {
       updateStore((current) => ({
         ...current,
         workspaces: current.workspaces.map((workspace) => {
-          if (workspace.id !== current.activeWorkspaceId) {
-            return workspace;
-          }
-
+          if (workspace.name !== current.activeWorkspaceName) return workspace;
           return {
             ...workspace,
-            requests: workspace.requests.map((request) =>
-              request.id === activeRequest.id
-                ? {
-                  ...request,
-                  url: normalizeUrl(request.url),
-                  responseBodyView: responseIsJson ? "JSON" : "Raw",
-                  lastResponse: savedResponse
-                }
-                : request
-            )
+            collections: workspace.collections.map((collection) => {
+              if (collection.name !== current.activeCollectionName) return collection;
+              return {
+                ...collection,
+                requests: collection.requests.map((request) =>
+                  request.name === activeRequest.name
+                    ? {
+                      ...request,
+                      url: normalizeUrl(request.url),
+                      responseBodyView: responseIsJson ? "JSON" : "Raw",
+                      lastResponse: savedResponse
+                    }
+                    : request
+                )
+              };
+            })
           };
         })
       }));
     } catch (error) {
       const message = error?.toString?.() || "Request failed";
       const savedAt = formatSavedAt();
-      const requestHeaders = serializeHeaders(activeRequest.headers, activeRequest.auth, activeRequest.bodyType);
       const savedResponse = {
         status: 500,
         badge: "Failed",
@@ -519,17 +781,20 @@ export function useWorkspaceStore() {
       updateStore((current) => ({
         ...current,
         workspaces: current.workspaces.map((workspace) => {
-          if (workspace.id !== current.activeWorkspaceId) {
-            return workspace;
-          }
-
+          if (workspace.name !== current.activeWorkspaceName) return workspace;
           return {
             ...workspace,
-            requests: workspace.requests.map((request) =>
-              request.id === activeRequest.id
-                ? { ...request, responseBodyView: "Raw", lastResponse: savedResponse }
-                : request
-            )
+            collections: workspace.collections.map((collection) => {
+              if (collection.name !== current.activeCollectionName) return collection;
+              return {
+                ...collection,
+                requests: collection.requests.map((request) =>
+                  request.name === activeRequest.name
+                    ? { ...request, responseBodyView: "Raw", lastResponse: savedResponse }
+                    : request
+                )
+              };
+            })
           };
         })
       }));
@@ -542,10 +807,12 @@ export function useWorkspaceStore() {
     store,
     isSending,
     isHydrated,
+    isSetupComplete,
     starCount,
     saveTimerRef,
     resizeRef,
     activeWorkspace,
+    activeCollection,
     activeRequest,
     requestTabs,
     response,
@@ -559,14 +826,28 @@ export function useWorkspaceStore() {
     createWorkspaceRecord,
     renameWorkspaceRecord,
     deleteWorkspaceRecord,
+    createCollectionRecord,
+    renameCollectionRecord,
+    deleteCollectionRecord,
+    duplicateCollectionRecord,
     createRequestRecord,
     duplicateRequestRecord,
+    pasteRequestRecord,
     renameRequestRecord,
     deleteRequestRecord,
     selectWorkspace,
+    selectCollection,
     selectRequest,
     togglePinRequestRecord,
     closeRequestTab,
     handleSend,
+    checkSetup: async () => {
+      try {
+        const config = await invoke("get_app_config");
+        setIsSetupComplete(!!config.storagePath);
+      } catch (error) {
+        console.error("Failed to check setup status:", error);
+      }
+    },
   };
 }

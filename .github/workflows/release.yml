@@ -48,14 +48,16 @@ jobs:
           releaseBody: |
             ### **Kivo ${{ github.ref_name }}**
 
-            This release introduces new features and important stability fixes.
+            This release introduces a major architectural overhaul with hierarchical collections and advanced interaction features.
 
-            - New: Added "Open Config Directory" button to workspaces for quick access to local data files.
-            - New: Migrated to Tauri's latest opener plugin for improved security and performance.
-            - Fixed: Resolved an issue where query parameters and headers could not be fully deleted.
-            - Fixed: Initialized new requests with empty parameter and header lists for a cleaner start.
-            - Fixed: Restored missing GraphQL variables editor in the request panel.
-            - Fixed: Improved UI responsiveness and font scaling across all screen sizes.
+            - New: Hierarchical Collection Structure. Organize requests into nested collections within workspaces.
+            - New: Setup Wizard. Seamless onboarding experience to bootstrap application configuration.
+            - New: Sidebar Search. Real-time filtering for collections and requests.
+            - New: Enhanced Context Menus. High-performance logic for cloning, renaming, and copy-pasting.
+            - New: Native System Dialogs. Integrated native directory selection for storage paths.
+            - Improved: Name-Based Identifiers. Robust tracking system for workspaces and collections.
+            - Fixed: "Show in Files" Integration. Reliable native folder reveal functionality.
+            - Fixed: Empty State Logic. Improved UI prompts for empty workspaces and collections.
 
             Installation
 

@@ -21,14 +21,14 @@ Kivo is a lightweight cross-platform HTTP client designed for developers who val
 ## Features
 
 - Native Performance: Built with Rust and Tauri for minimal resource usage and fast startup times
-- Collection Management: Organize your API requests into workspaces and collections
+- Hierarchical Structure: Organize your API requests into workspaces and nested collections
+- Setup Wizard: Seamless onboarding experience to bootstrap your application configuration
 - Tabbed Interface: Work on multiple requests simultaneously with a robust tab management system
-- Modern UI: Clean, responsive interface with dark and light mode support
-- Comprehensive Method Support: Full support for GET, POST, PUT, PATCH, DELETE, HEAD, and OPTIONS
-- GraphQL Support: Built-in query and variable editors for GraphQL APIs
-- History Tracking: Automatically keep track of your previous requests and responses
-- File Explorer Integration: Quickly open the local data directory directly from the sidebar
-- Security: Secure local storage for your workspaces and request data
+- Modern UI: Clean, responsive interface with deep dark mode support and sleek aesthetics
+- Sidebar Search: Quickly filter through your collections and requests with real-time search
+- Advanced Request Interaction: Comprehensive context menus for cloning, renaming, and copy-pasting requests
+- Native Dialogs: Integrated system-native selection for storage and file management
+- Security: Local-first data storage ensuring your request data stays on your machine
 
 ## Getting Started
 

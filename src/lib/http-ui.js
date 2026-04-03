@@ -55,8 +55,6 @@ export function isBodyAllowed(method, bodyType) {
     return false;
   }
 
-  // Allow bodies for all methods except maybe GET where it's non-standard,
-  // but many clients allow it anyway. We'll allow it if there's a body.
   return true;
 }
 

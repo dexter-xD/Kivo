@@ -29,8 +29,8 @@ fn build_headers(headers: &HashMap<String, String>) -> Result<HeaderMap, String>
     for (key, value) in headers {
         let name = HeaderName::from_bytes(key.as_bytes())
             .map_err(|_| format!("Invalid header name: {key}"))?;
-        let header_value = HeaderValue::from_str(value)
-            .map_err(|_| format!("Invalid header value for: {key}"))?;
+        let header_value =
+            HeaderValue::from_str(value).map_err(|_| format!("Invalid header value for: {key}"))?;
 
         header_map.insert(name, header_value);
     }

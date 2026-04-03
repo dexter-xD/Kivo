@@ -1,13 +1,9 @@
-export function createId(prefix) {
-  return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
 export function formatSavedAt() {
   return new Date().toLocaleString();
 }
 
-export function createRow(prefix) {
-  return { id: createId(prefix), key: "", value: "", enabled: true };
+export function createRow() {
+  return { key: "", value: "", enabled: true };
 }
 
 export function createEmptyResponse() {
@@ -30,9 +26,20 @@ export function createEmptyResponse() {
   };
 }
 
+export function getUniqueName(baseName, existingNames = []) {
+  if (!existingNames.includes(baseName)) {
+    return baseName;
+  }
+
+  let counter = 1;
+  while (existingNames.includes(`${baseName} (${counter})`)) {
+    counter++;
+  }
+  return `${baseName} (${counter})`;
+}
+
 export function createRequest(name = "New Request") {
   return {
-    id: createId("request"),
     name,
     pinned: false,
     method: "GET",
@@ -52,22 +59,30 @@ export function createRequest(name = "New Request") {
   };
 }
 
+export function createCollection(name = "New Collection") {
+  return {
+    name,
+    requests: [],
+    openRequestNames: []
+  };
+}
+
 export function createWorkspace(name, description = "") {
   return {
-    id: createId("workspace"),
     name,
     description,
-    requests: [],
-    history: [],
-    openRequestIds: []
+    collections: [],
+    activeCollectionName: ""
   };
 }
 
 export function createDefaultStore() {
   return {
     version: 1,
-    activeWorkspaceId: "",
-    activeRequestId: "",
+    storagePath: null,
+    activeWorkspaceName: "",
+    activeCollectionName: "",
+    activeRequestName: "",
     sidebarTab: "requests",
     sidebarCollapsed: false,
     sidebarWidth: 260,
@@ -76,17 +91,22 @@ export function createDefaultStore() {
 }
 
 export function getActiveWorkspace(store) {
-  return store.workspaces.find((workspace) => workspace.id === store.activeWorkspaceId) ?? store.workspaces[0] ?? null;
+  return store.workspaces.find((workspace) => workspace.name === store.activeWorkspaceName) ?? store.workspaces[0] ?? null;
+}
+
+export function getActiveCollection(store) {
+  const workspace = getActiveWorkspace(store);
+  if (!workspace) return null;
+  return workspace.collections.find((c) => c.name === store.activeCollectionName) ?? workspace.collections[0] ?? null;
 }
 
 export function getActiveRequest(store) {
-  const workspace = getActiveWorkspace(store);
-
-  if (!workspace || !workspace.openRequestIds?.includes(store.activeRequestId)) {
+  const collection = getActiveCollection(store);
+  if (!collection || !collection.openRequestNames?.includes(store.activeRequestName)) {
     return null;
   }
 
-  return workspace.requests.find((request) => request.id === store.activeRequestId) ?? null;
+  return collection.requests.find((request) => request.name === store.activeRequestName) ?? null;
 }
 
 export function orderRequests(requests = []) {
@@ -119,12 +139,10 @@ export function normalizeRequestRecord(request) {
 export function cloneRequest(request) {
   return {
     ...normalizeRequestRecord(request),
-    id: createId("request"),
-    name: `${request.name || "New Request"} Copy`,
     pinned: false,
-    queryParams: (request.queryParams || []).map((row) => ({ ...row, id: createId("param") })),
-    headers: (request.headers || []).map((row) => ({ ...row, id: createId("header") })),
-    bodyRows: (request.bodyRows || []).map((row) => ({ ...row, id: createId("body") })),
+    queryParams: (request.queryParams || []).map((row) => ({ ...row })),
+    headers: (request.headers || []).map((row) => ({ ...row })),
+    bodyRows: (request.bodyRows || []).map((row) => ({ ...row })),
     lastResponse: request.lastResponse ? { ...request.lastResponse } : null
   };
 }

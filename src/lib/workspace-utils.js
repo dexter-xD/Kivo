@@ -27,19 +27,27 @@ export function normalizeStore(store) {
   const workspaces = Array.isArray(nextStore.workspaces)
     ? nextStore.workspaces.map((workspace) => ({
       ...workspace,
-      requests: orderRequests((workspace.requests ?? []).map((request) => normalizeRequestRecord(request))),
-      openRequestIds: Array.isArray(workspace.openRequestIds) ? workspace.openRequestIds : (workspace.requests ?? []).map((request) => request.id)
+      collections: Array.isArray(workspace.collections)
+        ? workspace.collections.map((collection) => ({
+          ...collection,
+          requests: orderRequests((collection.requests ?? []).map((request) => normalizeRequestRecord(request))),
+          openRequestNames: Array.isArray(collection.openRequestNames) ? collection.openRequestNames : (collection.requests ?? []).map((request) => request.name)
+        }))
+        : []
     }))
     : [];
-  const activeWorkspace = workspaces.find((workspace) => workspace.id === nextStore.activeWorkspaceId) ?? workspaces[0] ?? null;
-  const activeRequest = activeWorkspace?.requests?.find((request) => request.id === nextStore.activeRequestId && activeWorkspace.openRequestIds.includes(request.id)) ?? null;
+  const activeWorkspace = workspaces.find((workspace) => workspace.name === nextStore.activeWorkspaceName) ?? workspaces[0] ?? null;
+  const activeCollection = activeWorkspace?.collections?.find((c) => c.name === nextStore.activeCollectionName) ?? activeWorkspace?.collections?.[0] ?? null;
+  const activeRequest = activeCollection?.requests?.find((request) => request.name === nextStore.activeRequestName && activeCollection.openRequestNames.includes(request.name)) ?? null;
 
   return {
     version: 1,
     sidebarTab: "requests",
+    storagePath: nextStore.storagePath || null,
     sidebarCollapsed: Boolean(nextStore.sidebarCollapsed),
-    activeWorkspaceId: activeWorkspace?.id ?? "",
-    activeRequestId: activeRequest?.id ?? "",
+    activeWorkspaceName: activeWorkspace?.name ?? "",
+    activeCollectionName: activeCollection?.name ?? "",
+    activeRequestName: activeRequest?.name ?? "",
     sidebarWidth: clampSidebarWidth(Number(nextStore.sidebarWidth || fallback.sidebarWidth)),
     workspaces
   };

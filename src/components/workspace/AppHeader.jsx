@@ -8,7 +8,7 @@ import { useTheme } from "@/hooks/use-theme.js";
 
 export function AppHeader({ workspaceTitle, workspaceDescription, starCount }) {
   const { theme, toggleTheme } = useTheme();
-  const version = "0.1.1"; // This can be passed as a prop if it changes dynamically
+  const version = "0.2.0";
 
   return (
     <Card className="flex items-center justify-between gap-4 border-0 border-b border-border/30 bg-card/55 px-3 py-2.5 shadow-none">
