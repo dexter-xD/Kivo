@@ -83,6 +83,17 @@ Contributions are welcome! If you have suggestions for improvements or encounter
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
+## Changelog
+
+### v0.3.1 (2026-04-06)
+
+- **Collection Data Loss**. Editing environment variables no longer wipes requests and subfolders from the collection directory.
+- **Requests Not Persisted**. New requests are now correctly saved to disk and survive app restarts.
+- **Request Not Working**. Deleting a request now properly removes its file from disk.
+- **Slash Names Breaking Storage**. Collection and request names with `/` are now safely sanitized for the filesystem.
+
+See the full [CHANGELOG.md](CHANGELOG.md) for more details.
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
