@@ -46,16 +46,13 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: "Kivo ${{ github.ref_name }}"
           releaseBody: |
-            ### **Kivo ${{ github.ref_name }}**
 
-            This release focuses on multi-scope environment variables and localized settings improvements.
+            ### This release focuses on storage reliability and data integrity fixes.
 
-            - New: Multi-Scope Environments. Manage global workspace variables and collection-specific overrides.
-            - New: Modernized Collection Settings. Completely redesigned Overview, Headers, and Auth pages.
-            - New: Auth Token Visibility. Toggle visibility for sensitive authentication tokens.
-            - New: Storage Folder Access. Open the data directory directly from the UI.
-            - Improved: Zero-Friction Workflow. Immediate autosave for deletions and improved navigation.
-            - Improved: Navbar Analytics. Refined environment chips and tooltip summaries.
-            - Fixed: Documents Storage Fallback. Corrected path resolution to default to your Documents folder.
-            - Fixed: Auth Save TypeError. Resolved various UI state-to-backend communication bugs.
+            - **Fixed**: Collection Data Loss. Editing environment variables no longer wipes requests and subfolders from the collection directory.
+            - **Fixed**: Requests Not Persisted. Newly created requests are now correctly written to disk and survive app restarts.
+            - **Fixed**: Delete Request Not Working. Deleting a request now properly removes its file from disk.
+            - **Fixed**: Slash Names Breaking Storage. Collection and request names containing `/` or other special characters are now safely sanitized for the filesystem while preserving the original display name.
+            - **Improved**: Storage Robustness. All serde structs now use safe defaults, preventing silent deserialization failures from corrupting state.
+            - **Improved**: Testability. Core storage logic extracted into pure functions and covered by 59 unit tests across normal, complex, and stress scenarios.
           projectPath: desktop

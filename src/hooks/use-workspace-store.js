@@ -154,7 +154,7 @@ export function useWorkspaceStore() {
 
     window.clearTimeout(saveTimerRef.current);
     saveTimerRef.current = window.setTimeout(() => {
-      saveAppState(store).catch(() => { });
+      saveAppState(store).catch((err) => { console.error("saveAppState failed:", err); });
     }, 300);
 
     return () => {

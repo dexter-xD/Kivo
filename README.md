@@ -11,7 +11,7 @@
   [![React](https://img.shields.io/badge/React-19-lightblue.svg)](https://react.dev/)
   [![Vite](https://img.shields.io/badge/Vite-7-purple.svg)](https://vitejs.dev/)
 
-  ![Kivo Banner](https://github.com/dexter-xD/Kivo/blob/main/assests/banner/banner-dark.jpg?raw=true)
+  ![Kivo Banner](/assests/banner/banner-dark.jpg)
 </div>
 
 ## Overview
