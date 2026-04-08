@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.3]. 2026-04-08
+
+### Hotfix: Native Auto-Updater
+
+- **Fixed**: Corrected a CI publishing issue where `latest.json` was missing from release artifacts.
+- **New**: Backports the Auto-Updater. Kivo now automatically checks for, silently downloads, and prepares updates under the hood.
+- **New**: Seamless Upgrades UI. Apply downloaded updates instantly via a Toast notification or manually check inside Collection Settings.
+- **Security**: Signed Binaries. Cryptographically secure Tauri signatures are exclusively utilized.
+
+- **Full Changelog**: [View CHANGELOG.md](https://github.com/dexter-xD/Kivo/blob/main/CHANGELOG.md)
+
 ## [0.3.2]. 2026-04-08
 
 ### This release introduces Native Auto-Updates.
