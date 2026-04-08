@@ -44,6 +44,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Kivo ${{ github.ref_name }}"
@@ -53,7 +55,7 @@ jobs:
 
             ### Hotfix: Native Auto-Updater
 
-            - **Fixed**: Corrected a CI publishing issue where `latest.json` was missing from release artifacts. Auto-updates will operate flawlessly from v0.3.3 onwards.
+            - **Fixed**: Corrected a CI publishing issue where `latest.json` was missing from release artifacts.
             - **New**: Backports the Auto-Updater. Kivo now automatically checks for, silently downloads, and prepares updates under the hood.
             - **New**: Seamless Upgrades UI. Apply downloaded updates instantly via a Toast notification or manually check inside Collection Settings.
             - **Security**: Signed Binaries. Cryptographically secure Tauri signatures are exclusively utilized.
