@@ -11,7 +11,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [ubuntu-latest, windows-latest]
+        include:
+          - platform: ubuntu-latest
+            args: ''
+          - platform: windows-latest
+            args: ''
+          - platform: macos-latest
+            args: '--target aarch64-apple-darwin'
+          - platform: macos-latest
+            args: '--target x86_64-apple-darwin'
     runs-on: ${{ matrix.platform }}
     steps:
       - name: Checkout repository
@@ -21,10 +29,12 @@ jobs:
         if: matrix.platform == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libnm-dev libsoup2.4-dev curl wget libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libnm-dev libsoup2.4-dev curl wget libappindicator3-dev librsvg2-dev patchelf rpm
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -51,6 +61,8 @@ jobs:
           releaseName: "Kivo ${{ github.ref_name }}"
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
+          generateReleaseNotes: true
+          args: ${{ matrix.args }}
           releaseBody: |
 
             ### Hotfix: Native Auto-Updater
@@ -59,8 +71,6 @@ jobs:
             - **New**: Backports the Auto-Updater. Kivo now automatically checks for, silently downloads, and prepares updates under the hood.
             - **New**: Seamless Upgrades UI. Apply downloaded updates instantly via a Toast notification or manually check inside Collection Settings.
             - **Security**: Signed Binaries. Cryptographically secure Tauri signatures are exclusively utilized.
-
-            - **Full Changelog**: [View CHANGELOG.md](https://github.com/dexter-xD/Kivo/blob/main/CHANGELOG.md)
           projectPath: desktop
 
       - name: Update CHANGELOG.md
@@ -70,7 +80,7 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           DATE=$(date +'%Y-%m-%d')
-          BODY=$(gh release view $GITHUB_REF_NAME --json body -q .body)
+          BODY=$(gh release view $GITHUB_REF_NAME --json body -q .body | grep -v "Full Changelog")
           
           echo "## [$VERSION]. $DATE" > new_entry.md
           echo "" >> new_entry.md

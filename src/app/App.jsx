@@ -97,6 +97,12 @@ export default function App() {
   }, [store?.storagePath]);
   const storagePath = resolvedPath;
 
+  useEffect(() => {
+    if (/Macintosh/.test(navigator.userAgent)) {
+      document.body.classList.add("macos");
+    }
+  }, []);
+
   const { vars: envVars, refresh: refreshEnvVars } = useEnv(activeWorkspace?.name, activeCollection?.name);
 
   function handleSelectRequest(workspaceName, collectionName, requestName) {
@@ -221,7 +227,7 @@ export default function App() {
 
             <>
               { }
-              <div className="flex shrink-0 items-center justify-between border-b border-border/25 bg-background/40 px-5 py-3 backdrop-blur-md">
+              <div data-tauri-drag-region className="flex shrink-0 items-center justify-between border-b border-border/25 bg-background/40 px-5 py-3 backdrop-blur-md">
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div className="text-[17px] font-semibold tracking-tight text-foreground truncate">
                     {activeCollection?.name ?? "Collection"}
@@ -240,14 +246,15 @@ export default function App() {
                   )}
                 </div>
                 <div className="flex items-center gap-2 ml-4">
-                  <div
+                  <button
+                    type="button"
                     className="flex cursor-pointer items-center gap-1.5 rounded-full bg-accent/30 px-3 py-1.5 text-muted-foreground transition-all hover:bg-accent/50 hover:text-foreground"
                     onClick={() => openUrl("https://github.com/dexter-xD/Kivo")}
                   >
                     <Github className="h-[16px] w-[16px]" />
                     <span className="text-[11px] font-semibold">{starCount ?? "..."}</span>
                     <Star className="h-[14px] w-[14px] fill-current text-yellow-500/80" />
-                  </div>
+                  </button>
                   <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full text-muted-foreground hover:bg-accent/40 hover:text-foreground" onClick={toggleTheme}>
                     {theme === "dark" ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}
                   </Button>
@@ -278,7 +285,7 @@ export default function App() {
           ) : showWorkspaceView ? (
 
             <>
-              <div className="flex shrink-0 items-center justify-between border-b border-border/25 bg-background/40 px-5 py-3.5 backdrop-blur-md">
+              <div data-tauri-drag-region className="flex shrink-0 items-center justify-between border-b border-border/25 bg-background/40 px-5 py-3.5 backdrop-blur-md">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-3">
                     <div className="text-[18px] font-semibold tracking-tight text-foreground">
@@ -299,14 +306,15 @@ export default function App() {
                   )}
                 </div>
                 <div className="flex items-center gap-2 ml-4">
-                  <div
+                  <button
+                    type="button"
                     className="flex cursor-pointer items-center gap-1.5 rounded-full bg-accent/30 px-3 py-1.5 text-muted-foreground transition-all hover:bg-accent/50 hover:text-foreground"
                     onClick={() => openUrl("https://github.com/dexter-xD/Kivo")}
                   >
                     <Github className="h-[16px] w-[16px]" />
                     <span className="text-[11px] font-semibold">{starCount ?? "..."}</span>
                     <Star className="h-[14px] w-[14px] fill-current text-yellow-500/80" />
-                  </div>
+                  </button>
                   <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full text-muted-foreground hover:bg-accent/40 hover:text-foreground" onClick={toggleTheme}>
                     {theme === "dark" ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}
                   </Button>

@@ -7,3 +7,4 @@ desktop/target/
 # signature keys
 *.key
 *.key.pub
+.superpowers/

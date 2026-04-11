@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Kivo",
   "version": "0.3.3",
-  "identifier": "com.kivo.app",
+  "identifier": "com.kivo.desktop",
   "build": {
     "beforeDevCommand": "pnpm frontend:dev",
     "beforeBuildCommand": "pnpm frontend:build",
@@ -16,7 +16,9 @@
         "title": "Kivo",
         "width": 1180,
         "height": 720,
-        "resizable": true
+        "resizable": true,
+        "titleBarStyle": "Transparent",
+        "hiddenTitle": true
       }
     ],
     "security": {
@@ -37,11 +39,15 @@
     "targets": [
       "msi",
       "nsis",
-      "deb"
+      "deb",
+      "rpm",
+      "dmg",
+      "app"
     ],
     "icon": [
       "icons/icon.ico",
-      "icons/icon.png"
+      "icons/icon.png",
+      "icons/icon.icns"
     ],
     "windows": {
       "nsis": {
@@ -58,6 +64,13 @@
     "linux": {
       "deb": {
         "depends": []
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15",
+      "dmg": {
+        "appPosition": { "x": 180, "y": 170 },
+        "applicationFolderPosition": { "x": 480, "y": 170 }
       }
     }
   }

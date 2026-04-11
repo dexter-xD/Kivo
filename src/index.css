@@ -136,6 +136,7 @@
   #root {
     @apply h-full overflow-hidden;
   }
+
 }
 
 @layer utilities {
@@ -296,5 +297,16 @@
 
   .thin-scrollbar::-webkit-scrollbar-corner {
     background: transparent;
+  }
+
+  /* macOS window drag region — makes the marked area draggable */
+  [data-tauri-drag-region] {
+    -webkit-app-region: drag;
+  }
+
+  [data-tauri-drag-region] button,
+  [data-tauri-drag-region] input,
+  [data-tauri-drag-region] a {
+    -webkit-app-region: no-drag;
   }
 }
