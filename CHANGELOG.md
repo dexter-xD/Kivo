@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.4]. 2026-04-11
+
+### v0.3.4: macOS & Linux RPM Support
+
+- **macOS Support**: Native DMG and App bundles for both Apple Silicon and Intel Macs.
+- **Native UX**: Transparent titlebar with overlay traffic lights and drag-region support for a better macOS experience.
+- **Linux Expansion**: Added `.rpm` package support alongside `.deb` for broader Linux compatibility.
+- **CI/CD**: Fully automated release pipeline for Windows, Linux (DEB/RPM), and macOS (DMG).
+
+## What's Changed
+* feat: add macOS build support (Intel + Apple Silicon DMGs) by @sriannamalai in https://github.com/dexter-xD/Kivo/pull/4
+
+## New Contributors
+* @sriannamalai made their first contribution in https://github.com/dexter-xD/Kivo/pull/4
+
 ## [0.3.3]. 2026-04-08
 
 ### Hotfix: Native Auto-Updater
