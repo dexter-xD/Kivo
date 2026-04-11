@@ -64,13 +64,12 @@ jobs:
           generateReleaseNotes: true
           args: ${{ matrix.args }}
           releaseBody: |
+            ### v0.3.4: macOS & Linux RPM Support
 
-            ### Hotfix: Native Auto-Updater
-
-            - **Fixed**: Corrected a CI publishing issue where `latest.json` was missing from release artifacts.
-            - **New**: Backports the Auto-Updater. Kivo now automatically checks for, silently downloads, and prepares updates under the hood.
-            - **New**: Seamless Upgrades UI. Apply downloaded updates instantly via a Toast notification or manually check inside Collection Settings.
-            - **Security**: Signed Binaries. Cryptographically secure Tauri signatures are exclusively utilized.
+            - **macOS Support**: Native DMG and App bundles for both Apple Silicon and Intel Macs.
+            - **Native UX**: Transparent titlebar with overlay traffic lights and drag-region support for a better macOS experience.
+            - **Linux Expansion**: Added `.rpm` package support alongside `.deb` for broader Linux compatibility.
+            - **CI/CD**: Fully automated release pipeline for Windows, Linux (DEB/RPM), and macOS (DMG).
           projectPath: desktop
 
       - name: Update CHANGELOG.md

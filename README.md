@@ -20,7 +20,8 @@ Kivo is a lightweight cross-platform HTTP client designed for developers who val
 
 ## Features
 
-- Native Performance: Built with Rust and Tauri for minimal resource usage and fast startup times
+- Native Performance: Built with Rust and Tauri for minimal resource usage and fast startup times across Windows, macOS, and Linux
+- Cross-Platform Support: Native builds for Windows (MSI/NSIS), macOS (Silicon/Intel DMG), and Linux (DEB/RPM)
 - Multi-Scope Environments: Manage global workspace variables and collection-specific overrides
 - Hierarchical Structure: Organize your API requests into workspaces and nested collections
 - Modernized Settings: Completely redesigned Overview, Headers, and Auth pages for a premium experience
@@ -85,6 +86,17 @@ Contributions are welcome! If you have suggestions for improvements or encounter
 5. Open a Pull Request
 
 ## Changelog
+
+### v0.3.4 (2026-04-12)
+
+- **macOS Support**. Added native builds for both Apple Silicon (`aarch64`) and Intel (`x86_64`) Macs with a premium transparent titlebar experience.
+- **Linux RPM Expansion**. Added support for `.rpm` packages, bringing Kivo to Fedora, RHEL, openSUSE, and more.
+- **Improved Release Pipeline**. Automated build and release process for all major desktop platforms.
+
+### v0.3.3 (2026-04-11)
+
+- **Auto-Update Polish**. Refined the auto-update UI to adhere to the sharp-edged design system.
+- **Bug Fixes**. Fixed various UI inconsistencies and improved window drag regions.
 
 ### v0.3.2 (2026-04-08)
 
