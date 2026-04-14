@@ -1,6 +1,28 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, Copy, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+function CopyButton({ value }) {
+  const [copied, setCopied] = useState(false);
+  
+  const handleCopy = (e) => {
+    e.stopPropagation();
+    const textToCopy = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+    navigator.clipboard.writeText(textToCopy);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  
+  return (
+    <button 
+      onClick={handleCopy}
+      className="opacity-0 group-hover:opacity-100 transition-opacity ml-2 text-muted-foreground hover:text-foreground focus:outline-none"
+      title="Copy value"
+    >
+      {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+    </button>
+  );
+}
 
 function JsonValue({ value }) {
   const type = typeof value;
@@ -32,10 +54,11 @@ export function JsonTree({ data, name, depth = 0, isLast = true }) {
   
   if (!isObject) {
     return (
-      <div className="flex gap-1.5 font-mono text-[13px] leading-relaxed py-0.5">
+      <div className="group flex items-center gap-1.5 font-mono text-[13px] leading-relaxed py-0.5 w-max pr-4">
         {name && <span className="json-key">"{name}":</span>}
         <JsonValue value={data} />
         {!isLast && <span className="json-punctuation">,</span>}
+        <CopyButton value={data} />
       </div>
     );
   }
@@ -48,10 +71,11 @@ export function JsonTree({ data, name, depth = 0, isLast = true }) {
   
   if (isEmpty) {
     return (
-      <div className="flex gap-1.5 font-mono text-[13px] leading-relaxed py-0.5">
+      <div className="group flex items-center gap-1.5 font-mono text-[13px] leading-relaxed py-0.5 w-max pr-4">
         {name && <span className="json-key">"{name}":</span>}
         <span className="json-punctuation">{bracketOpen}{bracketClose}</span>
         {!isLast && <span className="json-punctuation">,</span>}
+        <CopyButton value={data} />
       </div>
     );
   }
@@ -60,7 +84,7 @@ export function JsonTree({ data, name, depth = 0, isLast = true }) {
     <div className="flex flex-col font-mono text-[13px] leading-relaxed">
       <div 
         className={cn(
-          "flex items-center gap-1.5 cursor-pointer hover:bg-accent/30 py-0.5 px-1 rounded transition-colors w-max",
+          "group flex items-center gap-1.5 cursor-pointer hover:bg-accent/30 py-0.5 px-1 rounded transition-colors w-max pr-4",
           depth > 0 ? "-ml-4" : ""
         )}
         onClick={() => setExpanded(!expanded)}
@@ -76,6 +100,7 @@ export function JsonTree({ data, name, depth = 0, isLast = true }) {
           </span>
         )}
         {!expanded && <span className="json-punctuation ml-1">{bracketClose}{!isLast && ","}</span>}
+        <CopyButton value={data} />
       </div>
       
       {expanded && (
