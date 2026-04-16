@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::time::Instant;
+use base64::{engine::general_purpose, Engine as _};
 
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, USER_AGENT};
 use tauri::AppHandle;
@@ -101,22 +102,50 @@ pub async fn send_http_request(
         );
     }
 
-    let has_auth_header = merged_headers
-        .keys()
-        .any(|k| k.to_lowercase() == "authorization");
+    // 1. Resolve Auth Context
+    let active_auth = if payload.auth_type == "inherit" {
+        Some(col_config.default_auth)
+    } else {
+        payload.auth
+    };
 
-    if payload.auth_type == "inherit" && !has_auth_header {
-        if col_config.default_auth.auth_type == "bearer"
-            && !col_config.default_auth.token.is_empty()
-        {
-            merged_headers.insert(
-                "Authorization".to_string(),
-                format!("Bearer {}", col_config.default_auth.token),
-            );
+    let mut resolved_url = resolve_variables(&payload.url, &env_vars);
+
+    if let Some(auth) = active_auth {
+        match auth.auth_type.as_str() {
+            "bearer" => {
+                if !auth.token.is_empty() {
+                    let resolved_token = resolve_variables(&auth.token, &env_vars);
+                    merged_headers.insert("Authorization".to_string(), format!("Bearer {}", resolved_token));
+                }
+            }
+            "basic" => {
+                if !auth.username.is_empty() || !auth.password.is_empty() {
+                    let user = resolve_variables(&auth.username, &env_vars);
+                    let pass = resolve_variables(&auth.password, &env_vars);
+                    let credentials = format!("{}:{}", user, pass);
+                    let encoded = general_purpose::STANDARD.encode(credentials);
+                    merged_headers.insert("Authorization".to_string(), format!("Basic {}", encoded));
+                }
+            }
+            "apiKey" => {
+                if !auth.key.is_empty() {
+                    let key = resolve_variables(&auth.key, &env_vars);
+                    let value = resolve_variables(&auth.value, &env_vars);
+                    
+                    if auth.add_to == "query" {
+                        if let Ok(mut url_obj) = reqwest::Url::parse(&normalize_url(&resolved_url)?) {
+                            url_obj.query_pairs_mut().append_pair(&key, &value);
+                            resolved_url = url_obj.to_string();
+                        }
+                    } else {
+                        merged_headers.insert(key, value);
+                    }
+                }
+            }
+            _ => {}
         }
     }
-
-    let resolved_url = resolve_variables(&payload.url, &env_vars);
     let resolved_body = payload
         .body
         .as_deref()

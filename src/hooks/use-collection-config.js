@@ -4,7 +4,15 @@ import { getCollectionConfig, saveCollectionConfig } from "@/lib/http-client.js"
 
 const DEFAULT_CONFIG = {
   defaultHeaders: [],
-  defaultAuth: { type: "none", token: "" },
+  defaultAuth: { 
+    type: "none", 
+    token: "",
+    username: "",
+    password: "",
+    key: "",
+    value: "",
+    addTo: "header"
+  },
   scripts: { preRequest: "", postResponse: "" },
 };
 
@@ -26,7 +34,15 @@ export function useCollectionConfig(workspaceName, collectionName) {
       const result = await getCollectionConfig(workspaceName, collectionName);
       const normalized = {
         defaultHeaders: result.defaultHeaders ?? [],
-        defaultAuth: result.defaultAuth ?? { type: "none", token: "" },
+        defaultAuth: result.defaultAuth ?? { 
+          type: "none", 
+          token: "",
+          username: "",
+          password: "",
+          key: "",
+          value: "",
+          addTo: "header"
+        },
         scripts: result.scripts ?? { preRequest: "", postResponse: "" },
       };
       setConfig(normalized);

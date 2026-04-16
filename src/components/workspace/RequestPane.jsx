@@ -14,6 +14,8 @@ const requestMethods = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTION
 const authModes = [
   { value: "none", label: "No Auth" },
   { value: "bearer", label: "Bearer Token" },
+  { value: "basic", label: "Basic Auth" },
+  { value: "apiKey", label: "API Key" },
   { value: "inherit", label: "Inherit from Collection" },
 ];
 
@@ -508,13 +510,58 @@ export function RequestPane({
                 onChange={(type) => onAuthChange({ ...state.auth, type })}
               />
             </div>
-            {state.auth.type === "bearer" ? (
+            {state.auth.type === "bearer" && (
               <div className="grid max-w-[420px] gap-2">
                 <label className="text-[10px] uppercase tracking-[0.18em]">Token</label>
                 <Input value={state.auth.token} onChange={(event) => onAuthChange({ ...state.auth, token: event.target.value })} placeholder="Paste bearer token" />
               </div>
-            ) : (
-              <div className="bg-background/20 p-3">Authorization headers will be generated automatically when you choose an auth type.</div>
+            )}
+            {state.auth.type === "basic" && (
+              <div className="grid max-w-[420px] gap-4">
+                <div className="grid gap-2">
+                  <label className="text-[10px] uppercase tracking-[0.18em]">Username</label>
+                  <Input value={state.auth.username || ""} onChange={(e) => onAuthChange({ ...state.auth, username: e.target.value })} placeholder="Username" />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-[10px] uppercase tracking-[0.18em]">Password</label>
+                  <Input type="password" value={state.auth.password || ""} onChange={(e) => onAuthChange({ ...state.auth, password: e.target.value })} placeholder="Password" />
+                </div>
+              </div>
+            )}
+            {state.auth.type === "apiKey" && (
+              <div className="grid max-w-[420px] gap-4">
+                <div className="grid gap-2">
+                  <label className="text-[10px] uppercase tracking-[0.18em]">Key</label>
+                  <Input value={state.auth.key || ""} onChange={(e) => onAuthChange({ ...state.auth, key: e.target.value })} placeholder="X-API-Key" />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-[10px] uppercase tracking-[0.18em]">Value</label>
+                  <Input value={state.auth.value || ""} onChange={(e) => onAuthChange({ ...state.auth, value: e.target.value })} placeholder="API key value" />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-[10px] uppercase tracking-[0.18em]">Add to</label>
+                  <SelectMenu
+                    value={state.auth.addTo || "header"}
+                    options={[
+                      { value: "header", label: "Header" },
+                      { value: "query", label: "Query Params" },
+                    ]}
+                    onChange={(addTo) => onAuthChange({ ...state.auth, addTo })}
+                  />
+                </div>
+              </div>
+            )}
+            {state.auth.type === "none" && (
+              <div className="bg-background/20 p-3 italic">This request does not use any authentication.</div>
+            )}
+            {state.auth.type === "inherit" && (
+              <div className="bg-primary/5 border border-primary/20 p-4 rounded-lg">
+                <p className="text-[12px] text-foreground font-medium mb-1">Inheriting from Collection</p>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  This request uses the authentication settings defined in its parent collection. 
+                  You can manage these in the Collection Settings.
+                </p>
+              </div>
             )}
           </div>
         ) : null}

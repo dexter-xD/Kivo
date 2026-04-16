@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use crate::storage::AuthRecord;
 
 use serde::{Deserialize, Serialize};
 
@@ -18,6 +19,9 @@ pub struct RequestPayload {
 
     #[serde(default)]
     pub auth_type: String,
+
+    #[serde(default)]
+    pub auth: Option<AuthRecord>,
 
     #[serde(default)]
     pub inherit_headers: Option<bool>,

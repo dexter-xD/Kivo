@@ -288,6 +288,8 @@ function HeadersTab({ config, updateConfig, onSave, onReset, isDirty, isSaving }
 const AUTH_MODES = [
   { value: "none", label: "No Auth" },
   { value: "bearer", label: "Bearer Token" },
+  { value: "basic", label: "Basic Auth" },
+  { value: "apiKey", label: "API Key" },
 ];
 
 function AuthTab({ config, updateConfig, onSave, onReset, isDirty, isSaving }) {
@@ -344,9 +346,77 @@ function AuthTab({ config, updateConfig, onSave, onReset, isDirty, isSaving }) {
                 {showToken ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
               </button>
             </div>
-            <p className="text-[11px] text-muted-foreground mt-1">Supports {'{{variables}}'} resolution at runtime.</p>
           </div>
         )}
+        {auth.type === "basic" && (
+          <div className="grid gap-4 text-left w-full" style={{ animation: "fadeIn 0.2s ease-out" }}>
+            <div className="grid gap-2">
+              <label className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Username</label>
+              <Input
+                value={auth.username || ""}
+                onChange={(e) => updateConfig({ defaultAuth: { ...auth, username: e.target.value } })}
+                placeholder="Username"
+                className="h-10 border-border/40 bg-accent/20 text-[13px]"
+              />
+            </div>
+            <div className="grid gap-2">
+              <label className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Password</label>
+              <Input
+                type="password"
+                value={auth.password || ""}
+                onChange={(e) => updateConfig({ defaultAuth: { ...auth, password: e.target.value } })}
+                placeholder="Password"
+                className="h-10 border-border/40 bg-accent/20 font-mono text-[12px]"
+              />
+            </div>
+          </div>
+        )}
+        {auth.type === "apiKey" && (
+          <div className="grid gap-4 text-left w-full" style={{ animation: "fadeIn 0.2s ease-out" }}>
+            <div className="grid gap-2">
+              <label className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Key</label>
+              <Input
+                value={auth.key || ""}
+                onChange={(e) => updateConfig({ defaultAuth: { ...auth, key: e.target.value } })}
+                placeholder="X-API-Key"
+                className="h-10 border-border/40 bg-accent/20 text-[13px]"
+              />
+            </div>
+            <div className="grid gap-2">
+              <label className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Value</label>
+              <Input
+                value={auth.value || ""}
+                onChange={(e) => updateConfig({ defaultAuth: { ...auth, value: e.target.value } })}
+                placeholder="API key value"
+                className="h-10 border-border/40 bg-accent/20 text-[13px]"
+              />
+            </div>
+            <div className="grid gap-2">
+              <label className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">Add to</label>
+              <div className="flex items-center gap-2 p-1 rounded-lg bg-accent/30 border border-border/20 w-fit">
+                {[
+                  { value: "header", label: "Header" },
+                  { value: "query", label: "Query Params" },
+                ].map((l) => (
+                  <button
+                    key={l.value}
+                    type="button"
+                    onClick={() => updateConfig({ defaultAuth: { ...auth, addTo: l.value } })}
+                    className={cn(
+                      "px-3 py-1 rounded-md text-[11px] font-medium transition-all",
+                      (auth.addTo || "header") === l.value
+                        ? "bg-primary/20 text-primary shadow-sm"
+                        : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+                    )}
+                  >
+                    {l.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+        <p className="text-[11px] text-muted-foreground mt-1 text-left">Supports {'{{variables}}'} resolution at runtime.</p>
       </Card>
       <div className="flex items-center justify-between border-t border-border/10 pt-6">
         <div className="flex items-center gap-3 text-sm">

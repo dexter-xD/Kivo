@@ -47,7 +47,15 @@ pub struct CollectionConfig {
 }
 
 fn default_auth_record() -> AuthRecord {
-    AuthRecord { auth_type: "none".to_string(), token: String::new() }
+    AuthRecord {
+        auth_type: "none".to_string(),
+        token: String::new(),
+        username: String::new(),
+        password: String::new(),
+        key: String::new(),
+        value: String::new(),
+        add_to: "header".to_string(),
+    }
 }
 
 impl Default for CollectionConfig {
@@ -259,6 +267,16 @@ pub struct AuthRecord {
     pub auth_type: String,
     #[serde(default)]
     pub token: String,
+    #[serde(default)]
+    pub username: String,
+    #[serde(default)]
+    pub password: String,
+    #[serde(default)]
+    pub key: String,
+    #[serde(default)]
+    pub value: String,
+    #[serde(default)]
+    pub add_to: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

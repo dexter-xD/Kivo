@@ -146,6 +146,26 @@ export function serializeHeaders(rows = [], auth = { type: "none", token: "" }, 
     headers.Authorization = `Bearer ${String(auth.token).trim()}`;
   }
 
+  if (auth?.type === "basic") {
+    const user = String(auth.username || "").trim();
+    const pass = String(auth.password || "").trim();
+    if (user || pass) {
+      try {
+        const credentials = btoa(`${user}:${pass}`);
+        headers.Authorization = `Basic ${credentials}`;
+      } catch (e) {
+        headers.Authorization = `Basic [encoding-error]`;
+      }
+    }
+  }
+
+  if (auth?.type === "apiKey" && auth.addTo !== "query") {
+    const key = String(auth.key || "").trim();
+    if (key) {
+      headers[key] = String(auth.value || "").trim();
+    }
+  }
+
   const contentType = explicitContentType || getDefaultContentType(bodyType);
 
   if (contentType && !hasHeader(headers, "content-type")) {
@@ -207,6 +227,7 @@ export function buildRequestPayload(request, workspaceName, collectionName) {
     workspaceName: workspaceName || "",
     collectionName: collectionName || "",
     authType: request?.auth?.type ?? "none",
+    auth: request?.auth ?? null,
     inheritHeaders: request?.inheritHeaders ?? true,
   };
 }
