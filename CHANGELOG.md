@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.6]. 2026-04-18
+
+### v0.3.6: Expanded Auth Support & JSON Query Engine
+
+- **feat**: Expanded Auth Support. New support for Basic Auth and API Key (Header/Query) with inheritance.
+- **feat**: Environment Autocomplete. Triggered by `{{`, supports arrow-key navigation and Tab selection.
+- **feat**: Kivo JSON Query Engine v1. High-performance, index-backed engine for real-time response filtering.
+- **feat**: Enhanced Variable Highlighting. Robust syntax highlighting in URL and Auth fields.
+- **feat**: JSON Tree Filtering. Expression-based search with dynamic node highlighting.
+- **feat**: UI Polish. Bulk edit mode for headers, quick-copy for JSON nodes, and rich response visualization.
+- **fix**: Resolved state normalization bugs that stripped auth fields during rapid typing.
+- **fix**: Fixed header deletion and response persistence issues.
+
 ## [0.3.5]. 2026-04-12
 
 ### v0.3.5: Cross-Platform Storage & Smart Setup
