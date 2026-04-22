@@ -8,6 +8,10 @@ export function exchangeOAuthToken(payload) {
   return invoke("oauth_exchange_token", { payload });
 }
 
+export function cancelOAuthExchange(requestId) {
+  return invoke("cancel_oauth_exchange", { requestId });
+}
+
 export function loadAppState() {
   return invoke("load_app_state");
 }

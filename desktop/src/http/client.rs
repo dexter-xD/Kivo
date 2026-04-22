@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
@@ -6,11 +7,108 @@ use base64::Engine;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, ACCEPT, AUTHORIZATION, CONTENT_TYPE, USER_AGENT};
 use serde_json::Value;
 use tauri::AppHandle;
+use tokio::sync::watch;
 
 use super::models::{
     OAuthTokenExchangePayload, OAuthTokenExchangeResult, RequestPayload, ResponsePayload,
 };
 use crate::storage::{get_collection_dir, get_storage_root, load_collection_config_from_path, load_env_vars};
+
+static OAUTH_CANCEL_REGISTRY: OnceLock<Mutex<HashMap<String, watch::Sender<bool>>>> = OnceLock::new();
+
+fn oauth_cancel_registry() -> &'static Mutex<HashMap<String, watch::Sender<bool>>> {
+    OAUTH_CANCEL_REGISTRY.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn register_oauth_cancel(request_id: &str) -> Option<watch::Receiver<bool>> {
+    if request_id.trim().is_empty() {
+        return None;
+    }
+
+    let (cancel_tx, cancel_rx) = watch::channel(false);
+    let mut registry = oauth_cancel_registry().lock().unwrap();
+    registry.insert(request_id.to_string(), cancel_tx);
+    Some(cancel_rx)
+}
+
+fn unregister_oauth_cancel(request_id: &str) {
+    if request_id.trim().is_empty() {
+        return;
+    }
+
+    let mut registry = oauth_cancel_registry().lock().unwrap();
+    registry.remove(request_id);
+}
+
+struct OAuthCancelGuard {
+    request_id: String,
+}
+
+impl OAuthCancelGuard {
+    fn new(request_id: String) -> Self {
+        Self { request_id }
+    }
+}
+
+impl Drop for OAuthCancelGuard {
+    fn drop(&mut self) {
+        unregister_oauth_cancel(&self.request_id);
+    }
+}
+
+async fn send_oauth_form(
+    request: reqwest::RequestBuilder,
+    form: &[(String, String)],
+    cancel_rx: &mut Option<watch::Receiver<bool>>,
+    context: &str,
+) -> Result<reqwest::Response, String> {
+    if let Some(receiver) = cancel_rx.as_mut() {
+        tokio::select! {
+            changed = receiver.changed() => {
+                match changed {
+                    Ok(_) => {
+                        if *receiver.borrow() {
+                            return Err("OAuth token request cancelled by user.".to_string());
+                        }
+                        return Err("OAuth token request cancelled by user.".to_string());
+                    }
+                    Err(_) => {
+                        return Err("OAuth token request cancelled by user.".to_string());
+                    }
+                }
+            }
+            response = request.form(form).send() => {
+                response.map_err(|err| format!("{context}: {err}"))
+            }
+        }
+    } else {
+        request
+            .form(form)
+            .send()
+            .await
+            .map_err(|err| format!("{context}: {err}"))
+    }
+}
+
+#[tauri::command]
+pub async fn cancel_oauth_exchange(request_id: String) -> Result<bool, String> {
+    let trimmed = request_id.trim().to_string();
+    if trimmed.is_empty() {
+        return Ok(false);
+    }
+
+    let sender = {
+        let mut registry = oauth_cancel_registry().lock().unwrap();
+        registry.remove(&trimmed)
+    };
+
+    if let Some(cancel_tx) = sender {
+        let _ = cancel_tx.send(true);
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
 
 fn resolve_variables(input: &str, vars: &HashMap<String, String>) -> String {
     let mut result = input.to_string();
@@ -87,6 +185,10 @@ pub async fn oauth_exchange_token(
     app: AppHandle,
     payload: OAuthTokenExchangePayload,
 ) -> Result<OAuthTokenExchangeResult, String> {
+    let request_id = payload.request_id.trim().to_string();
+    let _cancel_guard = OAuthCancelGuard::new(request_id.clone());
+    let mut cancel_rx = register_oauth_cancel(&request_id);
+
     let env_vars = get_env_context(&app, &payload.workspace_name, &payload.collection_name);
     let oauth = payload.oauth;
 
@@ -195,11 +297,12 @@ pub async fn oauth_exchange_token(
         request = request.header(AUTHORIZATION, format!("Basic {}", encoded));
     }
 
-    let mut response = request
-        .form(&request_form)
-        .send()
-        .await
-        .map_err(|err| format!("OAuth token request failed: {err}"))?;
+    let mut response = send_oauth_form(
+        request,
+        &request_form,
+        &mut cancel_rx,
+        "OAuth token request failed",
+    ).await?;
 
     let mut status = response.status();
     let mut text = response
@@ -240,11 +343,12 @@ pub async fn oauth_exchange_token(
             retry_request = retry_request.header(AUTHORIZATION, format!("Basic {}", encoded));
         }
 
-        response = retry_request
-            .form(&retry_form)
-            .send()
-            .await
-            .map_err(|err| format!("OAuth token retry failed: {err}"))?;
+        response = send_oauth_form(
+            retry_request,
+            &retry_form,
+            &mut cancel_rx,
+            "OAuth token retry failed",
+        ).await?;
 
         status = response.status();
         text = response

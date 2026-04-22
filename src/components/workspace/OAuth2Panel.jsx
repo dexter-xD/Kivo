@@ -22,7 +22,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button.jsx";
 import { EnvHighlightInput } from "@/components/ui/EnvHighlightInput.jsx";
-import { exchangeOAuthToken } from "@/lib/http-client.js";
+import { cancelOAuthExchange, exchangeOAuthToken } from "@/lib/http-client.js";
 import {
   buildAuthorizationUrl,
   createOAuthRow,
@@ -357,6 +357,7 @@ export function OAuth2Panel({
   const [feedbackNonce, setFeedbackNonce] = useState(0);
   const hasMountedResponseRef = useRef(false);
   const lastToastNonceRef = useRef(0);
+  const activeExchangeIdRef = useRef("");
 
   const warnings = useMemo(() => getOAuthWarnings(auth), [auth]);
   const validationErrors = useMemo(() => getOAuthValidationErrors(auth), [auth]);
@@ -494,6 +495,8 @@ export function OAuth2Panel({
   }
 
   async function handleExchange(grantTypeOverride = oauth.grantType) {
+    const requestId = `oauth-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    activeExchangeIdRef.current = requestId;
     setIsExchanging(true);
     setError("");
     setNotice("");
@@ -502,12 +505,17 @@ export function OAuth2Panel({
       const result = await exchangeOAuthToken({
         workspaceName: workspaceName || "",
         collectionName: collectionName || "",
+        requestId,
         oauth: {
           ...oauth,
           grantType: grantTypeOverride,
           authorizationCode: extractAuthorizationCode(oauth.authorizationCode),
         },
       });
+
+      if (activeExchangeIdRef.current !== requestId) {
+        return;
+      }
 
       await persistAndNotify(
         {
@@ -525,12 +533,42 @@ export function OAuth2Panel({
         "Token saved and ready for this auth config."
       );
     } catch (nextError) {
+      if (activeExchangeIdRef.current !== requestId) {
+        return;
+      }
+
       const message = nextError?.toString?.() || "OAuth token exchange failed.";
       updateOAuth({ lastError: message, lastStatus: "token-error" });
       setError(message);
       setFeedbackNonce((value) => value + 1);
     } finally {
+      if (activeExchangeIdRef.current === requestId) {
+        activeExchangeIdRef.current = "";
+        setIsExchanging(false);
+      }
+    }
+  }
+
+  async function handleCancelExchange() {
+    const requestId = activeExchangeIdRef.current;
+    if (!requestId) {
       setIsExchanging(false);
+      return;
+    }
+
+    activeExchangeIdRef.current = "";
+    setIsExchanging(false);
+
+    try {
+      await cancelOAuthExchange(requestId);
+      updateOAuth({ lastStatus: "token-cancelled", lastError: "", lastWarning: "" });
+      setError("");
+      setNotice("Token request cancelled.");
+      setFeedbackNonce((value) => value + 1);
+    } catch {
+      setNotice("");
+      setError("Failed to cancel token request.");
+      setFeedbackNonce((value) => value + 1);
     }
   }
 
@@ -861,11 +899,12 @@ export function OAuth2Panel({
             <Button
               type="button"
               size="sm"
-              onClick={() => handleExchange(oauth.grantType)}
-              disabled={isExchanging || validationErrors.length > 0}
+              onClick={isExchanging ? handleCancelExchange : () => handleExchange(oauth.grantType)}
+              variant={isExchanging ? "outline" : "default"}
+              disabled={!isExchanging && validationErrors.length > 0}
             >
-              <KeyRound className="h-3.5 w-3.5" />
-              {isExchanging ? "Fetching" : "Get Access Token"}
+              {isExchanging ? <XCircle className="h-3.5 w-3.5" /> : <KeyRound className="h-3.5 w-3.5" />}
+              {isExchanging ? "Cancel" : "Get Access Token"}
             </Button>
           </div>
         </div>

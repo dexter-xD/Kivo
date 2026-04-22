@@ -106,6 +106,8 @@ pub struct OAuthTokenExchangePayload {
     pub workspace_name: String,
     #[serde(default)]
     pub collection_name: String,
+    #[serde(default)]
+    pub request_id: String,
     pub oauth: OAuthPayload,
 }
 
