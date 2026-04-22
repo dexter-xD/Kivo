@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0]. 2026-04-23
+
+### v0.4.0: OAuth 2.0 Integration & Modernized Workspace
+- **feat**: add oauth2 auth flow with native exchange
+- **feat**: add app settings page with storage management
+- **feat**: modernize app settings UI & navigation
+- **feat**: add dot-path and prefix queries for JSON filtering
+- **feat**: add cancellable loading state for responses
+- **feat**: add report issue link & support resources
+- **feat**: add sonner toasts for improved notifications
+- **feat**: add exchange cancel support for OAuth flow
+- **fix**: major refactor to stabilize auth panel inputs
+- **fix**: align settings pane width and responsiveness
+- **fix**: stack app settings sections for better layout
+- **fix**: normalize storage path logic to Kivo root
+- **fix**: preserve settings sidebar tab state
+- **fix**: decouple sidebar select toggle logic
+- **fix**: resolve auth environment variable exporting
+- **fix**: update auth test fixtures and validation
+- **fix**: trim refresh inputs and handle cursor drift
+- **Note**: This project has officially migrated from `dexter-xD/Kivo` to `DevlogZz/Kivo`.
+- **Author**: dexter-xD, Now part of DevlogZz.
+
 ## [0.3.6]. 2026-04-18
 
 ### v0.3.6: Expanded Auth Support & JSON Query Engine

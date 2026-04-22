@@ -36,17 +36,17 @@ Kivo is a lightweight cross-platform HTTP client designed for developers who val
 - **Expanded Auth Support**: Comprehensive support for Basic Auth, API Key (Header/Query), and environment-aware token management with inheritance.
 - **Environment Autocomplete**: Real-time `{{variable}}` suggestions with arrow-key navigation for a faster workflow.
 
-## Download Kivo (v4.0.0)
+## Download Kivo (v0.4.0)
 
 Get the latest stable version for your operating system:
 
 | Platform | Installer | Architecture |
 | :--- | :--- | :--- |
-| **Windows** | [Download .exe](https://github.com/DevlogZz/Kivo/releases/download/v4.0.0/Kivo_4.0.0_x64-setup.exe) / [.msi](https://github.com/DevlogZz/Kivo/releases/download/v4.0.0/Kivo_4.0.0_x64_en-US.msi) | `x64` |
-| **macOS** | [Apple Silicon .dmg](https://github.com/DevlogZz/Kivo/releases/download/v4.0.0/Kivo_4.0.0_aarch64.dmg) | `arm64` |
-| **macOS** | [Intel .dmg](https://github.com/DevlogZz/Kivo/releases/download/v4.0.0/Kivo_4.0.0_x64.dmg) | `x64` |
-| **Linux** | [Download .deb](https://github.com/DevlogZz/Kivo/releases/download/v4.0.0/Kivo_4.0.0_amd64.deb) | `x64` |
-| **Linux** | [Download .rpm](https://github.com/DevlogZz/Kivo/releases/download/v4.0.0/Kivo-4.0.0-1.x86_64.rpm) | `x64` |
+| **Windows** | [Download .exe](https://github.com/DevlogZz/Kivo/releases/download/v0.4.0/Kivo_0.4.0_x64-setup.exe) / [.msi](https://github.com/DevlogZz/Kivo/releases/download/v0.4.0/Kivo_0.4.0_x64_en-US.msi) | `x64` |
+| **macOS** | [Apple Silicon .dmg](https://github.com/DevlogZz/Kivo/releases/download/v0.4.0/Kivo_0.4.0_aarch64.dmg) | `arm64` |
+| **macOS** | [Intel .dmg](https://github.com/DevlogZz/Kivo/releases/download/v0.4.0/Kivo_0.4.0_x64.dmg) | `x64` |
+| **Linux** | [Download .deb](https://github.com/DevlogZz/Kivo/releases/download/v0.4.0/Kivo_0.4.0_amd64.deb) | `x64` |
+| **Linux** | [Download .rpm](https://github.com/DevlogZz/Kivo/releases/download/v0.4.0/Kivo-0.4.0-1.x86_64.rpm) | `x64` |
 
 *For other formats and old releases, visit the [Releases page](https://github.com/DevlogZz/Kivo/releases).*
 
@@ -54,15 +54,15 @@ Get the latest stable version for your operating system:
 
 - **Debian / Ubuntu**:
   ```bash
-  sudo apt install ./Kivo_4.0.0_amd64.deb
+  sudo apt install ./Kivo_0.4.0_amd64.deb
   ```
 - **Fedora / RHEL**:
   ```bash
-  sudo dnf install ./Kivo-4.0.0-1.x86_64.rpm
+  sudo dnf install ./Kivo-0.4.0-1.x86_64.rpm
   ```
 - **Arch / Other (RPM via rpm tool)**:
   ```bash
-  sudo rpm -i --nodeps --nosignature ./Kivo-4.0.0-1.x86_64.rpm
+  sudo rpm -i --nodeps --nosignature ./Kivo-0.4.0-1.x86_64.rpm
   ```
 
 ---
@@ -115,7 +115,7 @@ Contributions are welcome! If you have suggestions for improvements or encounter
 
 ## Changelog
 
-### v4.0.0 (2026-04-23)
+### v0.4.0 (2026-04-23)
 
 - **feat**: add oauth2 auth flow with native exchange
 - **feat**: add app settings page with storage management

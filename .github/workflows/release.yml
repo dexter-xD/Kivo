@@ -64,7 +64,7 @@ jobs:
           generateReleaseNotes: true
           args: ${{ matrix.args }}
           releaseBody: |
-            ### v4.0.0: OAuth 2.0 Integration & Modernized Workspace
+            ### v0.4.0: OAuth 2.0 Integration & Modernized Workspace
             - **feat**: add oauth2 auth flow with native exchange
             - **feat**: add app settings page with storage management
             - **feat**: modernize app settings UI & navigation
