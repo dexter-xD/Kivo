@@ -24,6 +24,7 @@ export function clampSidebarWidth(value) {
 export function normalizeStore(store) {
   const fallback = createDefaultStore();
   const nextStore = store && typeof store === "object" ? store : fallback;
+  const validSidebarTabs = new Set(["requests", "settings"]);
   const workspaces = Array.isArray(nextStore.workspaces)
     ? nextStore.workspaces.map((workspace) => ({
       ...workspace,
@@ -42,7 +43,7 @@ export function normalizeStore(store) {
 
   return {
     version: 1,
-    sidebarTab: "requests",
+    sidebarTab: validSidebarTabs.has(nextStore.sidebarTab) ? nextStore.sidebarTab : "requests",
     storagePath: nextStore.storagePath || null,
     sidebarCollapsed: Boolean(nextStore.sidebarCollapsed),
     activeWorkspaceName: activeWorkspace?.name ?? "",
