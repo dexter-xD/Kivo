@@ -708,7 +708,6 @@ export function RequestsView({
                       onClick={(e) => {
                         e.stopPropagation();
                         onSelectCollection(effectiveWorkspaceName, col.name);
-                        setExpandedCollectionNames(c => c.includes(col.name) ? c.filter(n => n !== col.name) : [...c, col.name]);
                       }}
                       onDoubleClick={(e) => {
                         e.stopPropagation();
@@ -720,11 +719,18 @@ export function RequestsView({
                         isActive ? "bg-accent/40 text-foreground" : "text-foreground/80 hover:bg-accent/20"
                       )}
                     >
-                      <div
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExpandedCollectionNames((c) =>
+                            c.includes(col.name) ? c.filter((n) => n !== col.name) : [...c, col.name]
+                          );
+                        }}
                         className="text-muted-foreground hover:text-foreground p-0.5"
                       >
                         {isColExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                      </div>
+                      </button>
                       <div className="truncate text-[12.5px] font-medium flex-1 text-left">
                         {col.name}
                       </div>
