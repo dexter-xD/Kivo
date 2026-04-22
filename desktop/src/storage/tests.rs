@@ -7,7 +7,7 @@ use super::{
     fs_get_env_vars, fs_load_workspaces, fs_save_collection_config, fs_save_env_vars,
     fs_save_workspaces, load_collection_config_from_path, parse_env_file_ordered,
     sanitize_name, write_env_file, AuthRecord, CollectionConfig, CollectionRecord,
-    CollectionScripts, EnvVar, KeyValueRow, RequestRecord, ResponseMeta, SavedResponse,
+    CollectionScripts, EnvVar, KeyValueRow, OAuthConfig, RequestRecord, ResponseMeta, SavedResponse,
     WorkspaceRecord,
 };
 
@@ -18,7 +18,7 @@ fn make_request(name: &str) -> RequestRecord {
         url: "https://example.com".to_string(),
         query_params: vec![],
         headers: vec![],
-        auth: AuthRecord { auth_type: "none".to_string(), token: String::new(), username: String::new(), password: String::new(), api_key_name: String::new(), api_key_value: String::new(), api_key_in: "header".to_string() },
+        auth: AuthRecord { auth_type: "none".to_string(), token: String::new(), username: String::new(), password: String::new(), api_key_name: String::new(), api_key_value: String::new(), api_key_in: "header".to_string(), oauth2: OAuthConfig::default() },
         body_type: "json".to_string(),
         body: String::new(),
         docs: String::new(),
@@ -306,7 +306,7 @@ mod collection_config_tests {
         let dir = TempDir::new().unwrap();
         fs_save_workspaces(dir.path(), &[ws("ws", vec![col("api", vec![])])]).unwrap();
         let config = CollectionConfig {
-            default_auth: AuthRecord { auth_type: "bearer".to_string(), token: "tok123".to_string(), username: String::new(), password: String::new(), api_key_name: String::new(), api_key_value: String::new(), api_key_in: "header".to_string() },
+            default_auth: AuthRecord { auth_type: "bearer".to_string(), token: "tok123".to_string(), username: String::new(), password: String::new(), api_key_name: String::new(), api_key_value: String::new(), api_key_in: "header".to_string(), oauth2: OAuthConfig::default() },
             default_headers: vec![
                 KeyValueRow { key: "X-Api-Key".to_string(), value: "secret".to_string(), enabled: true },
             ],
@@ -338,7 +338,7 @@ mod collection_config_tests {
         let workspaces = vec![ws("ws", vec![col("api", vec![make_request("r")])])];
         fs_save_workspaces(dir.path(), &workspaces).unwrap();
         let config = CollectionConfig {
-            default_auth: AuthRecord { auth_type: "bearer".to_string(), token: "preserved".to_string(), username: String::new(), password: String::new(), api_key_name: String::new(), api_key_value: String::new(), api_key_in: "header".to_string() },
+            default_auth: AuthRecord { auth_type: "bearer".to_string(), token: "preserved".to_string(), username: String::new(), password: String::new(), api_key_name: String::new(), api_key_value: String::new(), api_key_in: "header".to_string(), oauth2: OAuthConfig::default() },
             default_headers: vec![],
             scripts: CollectionScripts::default(),
         };
@@ -354,7 +354,7 @@ mod collection_config_tests {
         let dir = TempDir::new().unwrap();
         fs_save_workspaces(dir.path(), &[ws("ws", vec![col("auth/user", vec![])])]).unwrap();
         let config = CollectionConfig {
-            default_auth: AuthRecord { auth_type: "bearer".to_string(), token: "tok".to_string(), username: String::new(), password: String::new(), api_key_name: String::new(), api_key_value: String::new(), api_key_in: "header".to_string() },
+            default_auth: AuthRecord { auth_type: "bearer".to_string(), token: "tok".to_string(), username: String::new(), password: String::new(), api_key_name: String::new(), api_key_value: String::new(), api_key_in: "header".to_string(), oauth2: OAuthConfig::default() },
             default_headers: vec![],
             scripts: CollectionScripts::default(),
         };
@@ -523,7 +523,7 @@ mod complex_scenario_tests {
         req.body_type = "json".to_string();
         req.query_params = vec![KeyValueRow { key: "v".to_string(), value: "2".to_string(), enabled: true }];
         req.headers = vec![KeyValueRow { key: "Content-Type".to_string(), value: "application/json".to_string(), enabled: true }];
-        req.auth = AuthRecord { auth_type: "bearer".to_string(), token: "tok".to_string(), username: String::new(), password: String::new(), api_key_name: String::new(), api_key_value: String::new(), api_key_in: "header".to_string() };
+        req.auth = AuthRecord { auth_type: "bearer".to_string(), token: "tok".to_string(), username: String::new(), password: String::new(), api_key_name: String::new(), api_key_value: String::new(), api_key_in: "header".to_string(), oauth2: OAuthConfig::default() };
         fs_save_workspaces(dir.path(), &[ws("ws", vec![col("auth", vec![req])])]).unwrap();
         let loaded = fs_load_workspaces(dir.path()).unwrap();
         let r = &loaded[0].collections[0].requests[0];
