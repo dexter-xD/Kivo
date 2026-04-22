@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { BookOpen, ExternalLink, FileText, FolderOpen, Github, HardDrive, Heart, RefreshCw, Settings2, Star } from "lucide-react";
+import { BookOpen, ExternalLink, FileText, FolderOpen, Github, HardDrive, Heart, RefreshCw, Settings2, Siren, Star } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button.jsx";
@@ -151,7 +151,7 @@ export function AppSettingsPage({ storagePath, onStoragePathChanged }) {
   return (
     <div className="thin-scrollbar flex h-full min-h-0 flex-col overflow-y-auto overflow-x-hidden p-6 lg:p-7">
       <div className="mb-5 flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/25 bg-primary/12 text-primary shadow-sm shadow-primary/10">
+        <div className="flex h-10 w-10 items-center justify-center border border-primary/25 bg-primary/12 text-primary shadow-sm shadow-primary/10">
           <Settings2 className="h-4.5 w-4.5" />
         </div>
         <div>
@@ -329,6 +329,15 @@ export function AppSettingsPage({ storagePath, onStoragePathChanged }) {
                 className="flex items-center justify-between rounded-lg border border-border/35 bg-accent/15 px-3 py-2.5 text-left transition-colors hover:bg-accent/30"
               >
                 <span className="flex items-center gap-2 text-foreground"><Heart className="h-3.5 w-3.5 text-rose-400" />Sponsor this Project</span>
+                <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleOpenExternal("https://github.com/dexter-xD/Kivo/issues/new", "issue form")}
+                className="flex items-center justify-between rounded-lg border border-border/35 bg-accent/15 px-3 py-2.5 text-left transition-colors hover:bg-accent/30"
+              >
+                <span className="flex items-center gap-2 text-foreground"><Siren className="h-3.5 w-3.5 text-orange-400" />Report Issue</span>
                 <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
               </button>
             </div>
