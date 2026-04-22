@@ -1,3 +1,5 @@
+import { normalizeAuthState } from "@/lib/oauth.js";
+
 const methodTones = {
   GET: "tone-get-text tone-get-bg",
   POST: "tone-post-text tone-post-bg",
@@ -70,7 +72,7 @@ function getEnabledRows(rows = []) {
   return rows.filter((row) => row?.enabled && String(row.key || "").trim());
 }
 
-function serializeBodyByType(request, method) {
+function serializeBodyByType(request, method, resolveValue = (value) => String(value ?? "")) {
   const bodyType = request?.bodyType ?? "json";
 
   if (!isBodyAllowed(method, bodyType)) {
@@ -80,7 +82,7 @@ function serializeBodyByType(request, method) {
   if (bodyType === "form-urlencoded") {
     const params = new URLSearchParams();
     getEnabledRows(request?.bodyRows).forEach((row) => {
-      params.append(String(row.key).trim(), String(row.value || ""));
+      params.append(resolveValue(row.key).trim(), resolveValue(row.value));
     });
 
     return {
@@ -94,9 +96,9 @@ function serializeBodyByType(request, method) {
     const body = getEnabledRows(request?.bodyRows)
       .map((row) => [
         `--${boundary}`,
-        `Content-Disposition: form-data; name="${String(row.key).trim().replace(/"/g, '\\"')}"`,
+        `Content-Disposition: form-data; name="${resolveValue(row.key).trim().replace(/"/g, '\\"')}"`,
         "",
-        String(row.value || "")
+        resolveValue(row.value)
       ].join("\r\n"))
       .concat(`--${boundary}--`)
       .join("\r\n");
@@ -111,7 +113,7 @@ function serializeBodyByType(request, method) {
     let variables = {};
 
     try {
-      const parsed = JSON.parse(String(request?.graphqlVariables || "{}"));
+      const parsed = JSON.parse(resolveValue(request?.graphqlVariables || "{}"));
       variables = parsed && typeof parsed === "object" ? parsed : {};
     } catch {
       variables = {};
@@ -119,7 +121,7 @@ function serializeBodyByType(request, method) {
 
     return {
       body: JSON.stringify({
-        query: String(request?.body || ""),
+        query: resolveValue(request?.body || ""),
         variables
       }),
       contentType: getDefaultContentType(bodyType)
@@ -127,37 +129,37 @@ function serializeBodyByType(request, method) {
   }
 
   return {
-    body: String(request?.body || ""),
+    body: resolveValue(request?.body || ""),
     contentType: getDefaultContentType(bodyType)
   };
 }
 
-export function serializeHeaders(rows = [], auth = { type: "none", token: "" }, bodyType = "json", explicitContentType = "") {
+export function serializeHeaders(rows = [], auth = { type: "none", token: "" }, bodyType = "json", explicitContentType = "", resolveValue = (value) => String(value ?? "")) {
   const headers = rows.reduce((accumulator, row) => {
     if (!row?.enabled || !String(row.key || "").trim()) {
       return accumulator;
     }
 
-    accumulator[String(row.key).trim()] = String(row.value || "").trim();
+    accumulator[resolveValue(row.key).trim()] = resolveValue(row.value).trim();
     return accumulator;
   }, {});
 
-  if (auth?.type === "bearer" && String(auth.token || "").trim()) {
-    headers.Authorization = `Bearer ${String(auth.token).trim()}`;
+  if (auth?.type === "bearer" && resolveValue(auth.token).trim()) {
+    headers.Authorization = `Bearer ${resolveValue(auth.token).trim()}`;
   }
 
   if (auth?.type === "basic" && (auth.username || auth.password)) {
-    const encoded = btoa(`${auth.username ?? ""}:${auth.password ?? ""}`);
+    const encoded = btoa(`${resolveValue(auth.username)}:${resolveValue(auth.password)}`);
     headers.Authorization = `Basic ${encoded}`;
   }
 
-  if (auth?.type === "apikey" && auth.apiKeyIn !== "query" && String(auth.apiKeyName || "").trim()) {
-    headers[String(auth.apiKeyName).trim()] = String(auth.apiKeyValue || "");
+  if (auth?.type === "apikey" && auth.apiKeyIn !== "query" && resolveValue(auth.apiKeyName).trim()) {
+    headers[resolveValue(auth.apiKeyName).trim()] = resolveValue(auth.apiKeyValue);
   }
 
-  if (auth?.type === "oauth2" && String(auth?.oauth2?.accessToken || "").trim()) {
-    const tokenType = String(auth?.oauth2?.tokenType || "Bearer").trim() || "Bearer";
-    headers.Authorization = `${tokenType} ${String(auth.oauth2.accessToken).trim()}`;
+  if (auth?.type === "oauth2" && resolveValue(auth?.oauth2?.accessToken).trim()) {
+    const tokenType = resolveValue(auth?.oauth2?.tokenType || "Bearer").trim() || "Bearer";
+    headers.Authorization = `${tokenType} ${resolveValue(auth.oauth2.accessToken).trim()}`;
   }
 
   const contentType = explicitContentType || getDefaultContentType(bodyType);
@@ -220,6 +222,84 @@ export function buildRequestExport(request) {
   };
 }
 
+function resolveTemplateValue(value, mergedEnv = {}) {
+  return String(value ?? "").replace(/\{\{([^}]+)\}\}/g, (_, key) => mergedEnv[key.trim()] ?? "");
+}
+
+function hasHeaderName(headers, name) {
+  const lookup = String(name || "").toLowerCase();
+  return Object.keys(headers).some((key) => String(key).toLowerCase() === lookup);
+}
+
+function appendQueryParam(url, key, value) {
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.append(String(key), String(value));
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+export function buildResolvedRequestExport(request, context = {}) {
+  const method = String(request?.method || "GET").toUpperCase();
+  const bodyType = request?.bodyType ?? "json";
+  const mergedEnv = context?.envVars?.merged ?? {};
+  const resolveValue = (value) => resolveTemplateValue(value, mergedEnv);
+  const requestAuth = normalizeAuthState(request?.auth ?? { type: "none" });
+  const collectionAuth = normalizeAuthState(context?.collectionConfig?.defaultAuth ?? { type: "none" });
+  const effectiveAuth = requestAuth.type === "inherit" ? collectionAuth : requestAuth;
+  const inheritHeaders = request?.inheritHeaders ?? true;
+
+  const { body, contentType } = serializeBodyByType(request, method, resolveValue);
+  const defaultHeaders = inheritHeaders ? context?.collectionConfig?.defaultHeaders ?? [] : [];
+  const headerRows = [...defaultHeaders, ...(request?.headers ?? [])];
+  const headers = serializeHeaders(headerRows, { type: "none" }, bodyType, contentType, resolveValue);
+
+  const shouldAddInheritedAuth = requestAuth.type === "inherit" && !hasHeaderName(headers, "authorization");
+  if (shouldAddInheritedAuth || requestAuth.type !== "inherit") {
+    const authHeaders = serializeHeaders([], effectiveAuth, bodyType, "", resolveValue);
+    Object.entries(authHeaders).forEach(([key, value]) => {
+      headers[key] = value;
+    });
+  }
+
+  const resolvedUrl = resolveValue(request?.url ?? "");
+  const resolvedQueryParams = (request?.queryParams ?? []).map((row) => ({
+    ...row,
+    key: resolveValue(row?.key ?? ""),
+    value: resolveValue(row?.value ?? ""),
+  }));
+  let url = buildUrlWithParams(resolvedUrl, resolvedQueryParams);
+
+  if (requestAuth.type === "inherit" && effectiveAuth.type === "apikey" && effectiveAuth.apiKeyIn === "query" && resolveValue(effectiveAuth.apiKeyName).trim()) {
+    url = appendQueryParam(url, resolveValue(effectiveAuth.apiKeyName).trim(), resolveValue(effectiveAuth.apiKeyValue));
+  }
+
+  if (requestAuth.type === "apikey" && effectiveAuth.apiKeyIn === "query" && resolveValue(effectiveAuth.apiKeyName).trim()) {
+    try {
+      const parsed = new URL(url);
+      const key = resolveValue(effectiveAuth.apiKeyName).trim();
+      const alreadyHas = parsed.searchParams.has(key);
+      if (!alreadyHas) {
+        parsed.searchParams.append(key, resolveValue(effectiveAuth.apiKeyValue));
+      }
+      url = parsed.toString();
+    } catch {
+    }
+  }
+
+  return {
+    name: request?.name || "Untitled Request",
+    method,
+    url,
+    bodyType,
+    headers,
+    body,
+    hasBody: Boolean(body)
+  };
+}
+
 export function buildRequestPayload(request, workspaceName, collectionName) {
   const { method, url, headers, body, hasBody } = buildRequestExport(request);
   const auth = request?.auth ?? { type: "none" };
@@ -250,8 +330,8 @@ function escapeShellString(value) {
   return `'${String(value ?? "").replace(/'/g, "''")}'`;
 }
 
-function buildFetchSnippet(request) {
-  const { method, url, headers, body, hasBody } = buildRequestExport(request);
+function buildFetchSnippet(requestExport) {
+  const { method, url, headers, body, hasBody } = requestExport;
   const lines = [
     `const url = ${quoteString(url)};`,
     "",
@@ -275,8 +355,8 @@ function buildFetchSnippet(request) {
   return lines.join("\n");
 }
 
-function buildPythonSnippet(request) {
-  const { method, url, headers, body, hasBody } = buildRequestExport(request);
+function buildPythonSnippet(requestExport) {
+  const { method, url, headers, body, hasBody } = requestExport;
 
   return [
     "import requests",
@@ -290,8 +370,8 @@ function buildPythonSnippet(request) {
   ].filter(Boolean).join("\n");
 }
 
-function buildPowerShellSnippet(request) {
-  const { method, url, headers, body, hasBody } = buildRequestExport(request);
+function buildPowerShellSnippet(requestExport) {
+  const { method, url, headers, body, hasBody } = requestExport;
   const headerLines = Object.entries(headers).map(([key, value]) => `  ${quoteString(key)} = ${quoteString(value)}`);
 
   return [
@@ -304,8 +384,8 @@ function buildPowerShellSnippet(request) {
   ].filter((line, index, lines) => !(line === "" && lines[index - 1] === "")).join("\n");
 }
 
-function buildGoSnippet(request) {
-  const { method, url, headers, body, hasBody } = buildRequestExport(request);
+function buildGoSnippet(requestExport) {
+  const { method, url, headers, body, hasBody } = requestExport;
   const headerLines = Object.entries(headers).map(([key, value]) => `\treq.Header.Add(${quoteString(key)}, ${quoteString(value)})`);
 
   return [
@@ -343,8 +423,8 @@ function buildGoSnippet(request) {
   ].filter(Boolean).join("\n");
 }
 
-function buildJavaSnippet(request) {
-  const { method, url, headers, body, hasBody } = buildRequestExport(request);
+function buildJavaSnippet(requestExport) {
+  const { method, url, headers, body, hasBody } = requestExport;
   const headerLines = Object.entries(headers).map(([key, value]) => `.header(${quoteString(key)}, ${quoteString(value)})`);
   const publisher = hasBody ? `HttpRequest.BodyPublishers.ofString(${quoteString(body)})` : "HttpRequest.BodyPublishers.noBody()";
 
@@ -366,8 +446,8 @@ function buildJavaSnippet(request) {
   ].join("\n");
 }
 
-function buildCSharpSnippet(request) {
-  const { method, url, headers, body, hasBody } = buildRequestExport(request);
+function buildCSharpSnippet(requestExport) {
+  const { method, url, headers, body, hasBody } = requestExport;
   const contentTypeEntry = Object.entries(headers).find(([key]) => key.toLowerCase() === "content-type");
   const headerLines = Object.entries(headers)
     .filter(([key]) => key.toLowerCase() !== "content-type")
@@ -391,8 +471,8 @@ function buildCSharpSnippet(request) {
   ].filter(Boolean).join("\n");
 }
 
-function buildPhpSnippet(request) {
-  const { method, url, headers, body, hasBody } = buildRequestExport(request);
+function buildPhpSnippet(requestExport) {
+  const { method, url, headers, body, hasBody } = requestExport;
   const headerLines = Object.entries(headers).map(([key, value]) => `    ${quoteString(`${key}: ${value}`)},`);
 
   return [
@@ -417,8 +497,8 @@ function buildPhpSnippet(request) {
   ].filter(Boolean).join("\n");
 }
 
-function buildRubySnippet(request) {
-  const { method, url, headers, body, hasBody } = buildRequestExport(request);
+function buildRubySnippet(requestExport) {
+  const { method, url, headers, body, hasBody } = requestExport;
   const className = { GET: "Get", POST: "Post", PUT: "Put", PATCH: "Patch", DELETE: "Delete" }[method] ?? "Get";
   const headerLines = Object.entries(headers).map(([key, value]) => `request[${quoteString(key)}] = ${quoteString(value)}`);
 
@@ -439,8 +519,8 @@ function buildRubySnippet(request) {
   ].filter(Boolean).join("\n");
 }
 
-function buildSwiftSnippet(request) {
-  const { method, url, headers, body, hasBody } = buildRequestExport(request);
+function buildSwiftSnippet(requestExport) {
+  const { method, url, headers, body, hasBody } = requestExport;
   const headerLines = Object.entries(headers).map(([key, value]) => `request.setValue(${quoteString(value)}, forHTTPHeaderField: ${quoteString(key)})`);
 
   return [
@@ -466,8 +546,8 @@ function buildSwiftSnippet(request) {
   ].filter(Boolean).join("\n");
 }
 
-function buildCSnippet(request) {
-  const { method, url, headers, body, hasBody } = buildRequestExport(request);
+function buildCSnippet(requestExport) {
+  const { method, url, headers, body, hasBody } = requestExport;
   const headerLines = Object.entries(headers).map(([key, value]) => `    headers = curl_slist_append(headers, ${quoteString(`${key}: ${value}`)});`);
 
   return [
@@ -495,8 +575,9 @@ function buildCSnippet(request) {
   ].filter(Boolean).join("\n");
 }
 
-export function buildCurlCommand(request) {
-  const { method, url, headers, body, hasBody } = buildRequestExport(request);
+export function buildCurlCommand(request, context = null) {
+  const requestExport = context ? buildResolvedRequestExport(request, context) : buildRequestExport(request);
+  const { method, url, headers, body, hasBody } = requestExport;
   const parts = [
     "curl",
     "--request",
@@ -516,32 +597,36 @@ export function buildCurlCommand(request) {
   return parts.join(" ");
 }
 
-export function generateCodeSnippet(request, language) {
+export function generateCodeSnippet(request, language, context = null) {
+  const requestExport = context
+    ? buildResolvedRequestExport(request, context)
+    : buildRequestExport(request);
+
   switch (language) {
     case "javascript":
     case "nodejs":
-      return buildFetchSnippet(request);
+      return buildFetchSnippet(requestExport);
     case "python":
-      return buildPythonSnippet(request);
+      return buildPythonSnippet(requestExport);
     case "powershell":
-      return buildPowerShellSnippet(request);
+      return buildPowerShellSnippet(requestExport);
     case "go":
-      return buildGoSnippet(request);
+      return buildGoSnippet(requestExport);
     case "java":
-      return buildJavaSnippet(request);
+      return buildJavaSnippet(requestExport);
     case "csharp":
-      return buildCSharpSnippet(request);
+      return buildCSharpSnippet(requestExport);
     case "php":
-      return buildPhpSnippet(request);
+      return buildPhpSnippet(requestExport);
     case "ruby":
-      return buildRubySnippet(request);
+      return buildRubySnippet(requestExport);
     case "swift":
-      return buildSwiftSnippet(request);
+      return buildSwiftSnippet(requestExport);
     case "c":
-      return buildCSnippet(request);
+      return buildCSnippet(requestExport);
     case "shell":
     default:
-      return buildCurlCommand(request);
+      return buildCurlCommand(request, context);
   }
 }
 

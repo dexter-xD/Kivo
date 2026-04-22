@@ -7,6 +7,7 @@ import { CodeEditor } from "@/components/workspace/CodeEditor.jsx";
 import { Button } from "@/components/ui/button.jsx";
 import { Card } from "@/components/ui/card.jsx";
 import { Input } from "@/components/ui/input.jsx";
+import { getCollectionConfig, getEnvVars } from "@/lib/http-client.js";
 import { buildCurlCommand, codegenLanguageOptions, generateCodeSnippet, getMethodTone } from "@/lib/http-ui.js";
 import { cn } from "@/lib/utils.js";
 import { getUniqueName } from "@/lib/workspace-store.js";
@@ -122,7 +123,7 @@ function CreationField({ initialValue, existingNames, onSubmit, onCancel, placeh
   );
 }
 
-function GenerateCodeModal({ request, language, onLanguageChange, onClose }) {
+function GenerateCodeModal({ request, language, context, isLoadingContext, onLanguageChange, onClose }) {
   const [copied, setCopied] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
   const languageMenuRef = useRef(null);
@@ -131,8 +132,14 @@ function GenerateCodeModal({ request, language, onLanguageChange, onClose }) {
     [language]
   );
   const codeSnippet = useMemo(
-    () => (request ? generateCodeSnippet(request, language) : ""),
-    [language, request]
+    () => {
+      if (!request) return "";
+      if (isLoadingContext) {
+        return "// Resolving environment and auth context...";
+      }
+      return generateCodeSnippet(request, language, context);
+    },
+    [context, isLoadingContext, language, request]
   );
 
   useEffect(() => {
@@ -334,6 +341,8 @@ export function RequestsView({
   const [editingItemId, setEditingItemId] = useState(null);
   const [contextMenu, setContextMenu] = useState(null);
   const [codegenTarget, setCodegenTarget] = useState(null);
+  const [codegenContext, setCodegenContext] = useState(null);
+  const [isCodegenContextLoading, setIsCodegenContextLoading] = useState(false);
   const [codegenLanguage, setCodegenLanguage] = useState("shell");
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [expandedWorkspaceNames, setExpandedWorkspaceNames] = useState(() => workspaces.map((w) => w.name));
@@ -355,6 +364,53 @@ export function RequestsView({
     return getRequestRecord(workspaces, codegenTarget.workspaceName, codegenTarget.collectionName, codegenTarget.requestName);
   }, [workspaces, codegenTarget]);
 
+  async function loadExportContext(workspaceName, collectionName) {
+    const [envVars, collectionConfig] = await Promise.all([
+      getEnvVars(workspaceName, collectionName),
+      collectionName ? getCollectionConfig(workspaceName, collectionName) : Promise.resolve({ defaultHeaders: [], defaultAuth: { type: "none" } }),
+    ]);
+
+    return {
+      envVars,
+      collectionConfig: {
+        defaultHeaders: collectionConfig?.defaultHeaders ?? [],
+        defaultAuth: collectionConfig?.defaultAuth ?? { type: "none" },
+      },
+    };
+  }
+
+  useEffect(() => {
+    if (!codegenTarget) {
+      setCodegenContext(null);
+      setIsCodegenContextLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsCodegenContextLoading(true);
+
+    loadExportContext(codegenTarget.workspaceName, codegenTarget.collectionName)
+      .then((context) => {
+        if (!cancelled) {
+          setCodegenContext(context);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCodegenContext(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsCodegenContextLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [codegenTarget]);
+
   function handleGenerateCode(workspaceName, collectionName, requestName) {
     setCodegenTarget({ workspaceName, collectionName, requestName });
   }
@@ -363,7 +419,8 @@ export function RequestsView({
     const request = getRequestRecord(workspaces, workspaceName, collectionName, requestName);
     if (!request) return;
     try {
-      const curl = buildCurlCommand(request);
+      const context = await loadExportContext(workspaceName, collectionName);
+      const curl = buildCurlCommand(request, context);
       await navigator.clipboard.writeText(curl);
       setFeedbackMessage("cURL command copied to clipboard.");
       setTimeout(() => setFeedbackMessage(""), 2000);
@@ -819,7 +876,7 @@ export function RequestsView({
         />
       )}
       {feedbackMessage && <div className="pointer-events-none absolute bottom-4 left-1/2 z-40 -translate-x-1/2 border border-border/50 bg-card/95 px-3 py-2 text-[12px] text-foreground shadow-xl">{feedbackMessage}</div>}
-      <GenerateCodeModal request={codegenRequest} language={codegenLanguage} onLanguageChange={setCodegenLanguage} onClose={() => setCodegenTarget(null)} />
+      <GenerateCodeModal request={codegenRequest} language={codegenLanguage} context={codegenContext} isLoadingContext={isCodegenContextLoading} onLanguageChange={setCodegenLanguage} onClose={() => setCodegenTarget(null)} />
     </div>
   );
 }
