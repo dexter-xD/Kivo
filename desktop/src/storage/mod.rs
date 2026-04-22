@@ -672,6 +672,130 @@ pub fn set_storage_path(app: AppHandle, path: String) -> Result<(), String> {
     fs::write(&state_path, serialized).map_err(|e| format!("Failed to write state: {e}"))
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoragePathValidationResult {
+    pub exists: bool,
+    pub is_directory: bool,
+    pub writable: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StorageSwitchPayload {
+    pub path: String,
+    pub mode: String,
+}
+
+fn paths_equal(left: &Path, right: &Path) -> bool {
+    match (left.canonicalize(), right.canonicalize()) {
+        (Ok(l), Ok(r)) => l == r,
+        _ => left == right,
+    }
+}
+
+fn ensure_writable(path: &Path) -> bool {
+    let probe = path.join(format!(".kivo-write-test-{}", std::process::id()));
+    let can_write = fs::create_dir_all(&probe).is_ok();
+    if can_write {
+        let _ = fs::remove_dir_all(&probe);
+    }
+    can_write
+}
+
+fn copy_dir_recursive(source: &Path, target: &Path) -> Result<(), String> {
+    if !source.exists() {
+        return Ok(());
+    }
+
+    fs::create_dir_all(target)
+        .map_err(|e| format!("Failed to create target directory: {e}"))?;
+
+    for entry in fs::read_dir(source).map_err(|e| format!("Failed to read source directory: {e}"))? {
+        let entry = entry.map_err(|e| format!("Failed to read source entry: {e}"))?;
+        let src_path = entry.path();
+        let dst_path = target.join(entry.file_name());
+        let metadata = entry
+            .metadata()
+            .map_err(|e| format!("Failed to read source metadata: {e}"))?;
+
+        if metadata.is_dir() {
+            copy_dir_recursive(&src_path, &dst_path)?;
+        } else if metadata.is_file() {
+            if let Some(parent) = dst_path.parent() {
+                fs::create_dir_all(parent)
+                    .map_err(|e| format!("Failed to create destination parent: {e}"))?;
+            }
+            fs::copy(&src_path, &dst_path)
+                .map_err(|e| format!("Failed to copy file {}: {e}", src_path.to_string_lossy()))?;
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn validate_storage_path(path: String) -> Result<StoragePathValidationResult, String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("Path is required".to_string());
+    }
+
+    let candidate = PathBuf::from(trimmed);
+    let exists = candidate.exists();
+    let is_directory = exists && candidate.is_dir();
+    let writable = if is_directory {
+        ensure_writable(&candidate)
+    } else {
+        false
+    };
+
+    Ok(StoragePathValidationResult {
+        exists,
+        is_directory,
+        writable,
+    })
+}
+
+#[tauri::command]
+pub fn switch_storage_path(app: AppHandle, payload: StorageSwitchPayload) -> Result<(), String> {
+    let next_path_raw = payload.path.trim();
+    if next_path_raw.is_empty() {
+        return Err("Path is required".to_string());
+    }
+
+    let next_root = PathBuf::from(next_path_raw);
+    if !next_root.exists() {
+        return Err("Selected path does not exist".to_string());
+    }
+    if !next_root.is_dir() {
+        return Err("Selected path must be a directory".to_string());
+    }
+    if !ensure_writable(&next_root) {
+        return Err("Selected path is not writable".to_string());
+    }
+
+    let current_root = get_storage_root(&app)?;
+    if paths_equal(&current_root, &next_root) {
+        return Err("Selected path is already the current storage path".to_string());
+    }
+
+    match payload.mode.as_str() {
+        "copy" => {
+            copy_dir_recursive(&current_root, &next_root)?;
+        }
+        "fresh" => {
+            fs::create_dir_all(&next_root)
+                .map_err(|e| format!("Failed to prepare destination directory: {e}"))?;
+        }
+        _ => {
+            return Err("Invalid migration mode".to_string());
+        }
+    }
+
+    set_storage_path(app, next_root.to_string_lossy().to_string())
+}
+
 #[tauri::command]
 pub fn get_default_storage_path(app: AppHandle) -> Result<String, String> {
     if let Ok(doc) = app.path().document_dir() {

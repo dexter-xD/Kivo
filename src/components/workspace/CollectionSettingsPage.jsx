@@ -1,11 +1,10 @@
 ﻿import { useEffect, useState } from "react";
 import {
   BookOpen, Code2, FileJson, FlaskConical, FolderOpen, Globe, Layers,
-  Save, Share2, RotateCcw, ChevronRight, Eye, EyeOff, RefreshCw
+  Save, Share2, RotateCcw, ChevronRight, Eye, EyeOff
 } from "lucide-react";
 
 import { invoke } from "@tauri-apps/api/core";
-import { getVersion } from "@tauri-apps/api/app";
 
 import { Button } from "@/components/ui/button.jsx";
 import { Card } from "@/components/ui/card.jsx";
@@ -35,64 +34,7 @@ function HeadersTable({ rows, onChange, onDelete }) {
 
   return (
     <div className="flex flex-col">
-      { }
-      <div className="grid grid-cols-[36px_minmax(0,1fr)_minmax(0,1fr)_44px] border-b border-border/10 bg-accent/20 px-2 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-        <div className="py-2.5" />
-        <div className="py-2.5 font-semibold">Header Name</div>
-        <div className="py-2.5 font-semibold">Header Value</div>
-        <div className="py-2.5" />
-      </div>
-
-      {rows.map((row, idx) => (
-        <div
-          key={row.id}
-          className={cn(
-            "group grid grid-cols-[36px_minmax(0,1fr)_minmax(0,1fr)_44px] items-center border-b border-border/5 transition-colors hover:bg-accent/10 px-2"
-          )}
-        >
-          <label className="flex h-10 items-center justify-center cursor-pointer">
-            <input
-              type="checkbox"
-              checked={row.enabled}
-              onChange={(e) => update(row.id, "enabled", e.target.checked)}
-              className="accent-primary w-3.5 h-3.5 opacity-70 transition-opacity hover:opacity-100"
-            />
-          </label>
-          <Input
-            value={row.key}
-            onChange={(e) => update(row.id, "key", e.target.value)}
-            placeholder="e.g. Authorization"
-            className="h-10 border-0 bg-transparent text-[13px] font-medium shadow-none focus-visible:ring-0 focus-visible:bg-accent/20 rounded-none px-2"
-          />
-          <Input
-            value={row.value}
-            onChange={(e) => update(row.id, "value", e.target.value)}
-            placeholder="e.g. Bearer {{token}}"
-            className="h-10 border-0 bg-transparent text-[13px] shadow-none focus-visible:ring-0 font-mono text-muted-foreground focus-visible:text-foreground focus-visible:bg-accent/20 rounded-none px-2"
-          />
-          <button
-            type="button"
-            onClick={() => {
-              const nextRows = rows.filter((r) => r.id !== row.id);
-              onChange?.(nextRows);
-              onDelete?.(nextRows);
-            }}
-            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-red-500/10 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all justify-self-center"
-          >
-            âœ•
-          </button>
-        </div>
-      ))}
-
-      <div className="p-2">
-        <button
-          type="button"
-          onClick={() => onChange([...rows, createHeaderRow()])}
-          className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-medium text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
-        >
-          <span className="text-lg leading-none mb-0.5">+</span> Add Header
-        </button>
-      </div>
+      { /* ... */ }
     </div>
   );
 }
@@ -104,24 +46,11 @@ function OverviewTab({ workspace, collection, storagePath, envVars, onNavigate }
   const collectionPath =
     storagePath && workspace && collection
       ? [storagePath, workspace.name, "collections", collection.name].join(sep)
-      : "Loadingâ€¦";
+      : "Loading…";
 
   const globalCount = envVars?.workspace?.length ?? 0;
   const collectionCount = envVars?.collection?.length ?? 0;
   const requestCount = collection?.requests?.length ?? 0;
-
-  const [appVersion, setAppVersion] = useState("...");
-  const [updaterStatus, setUpdaterStatus] = useState("idle");
-
-  useEffect(() => {
-    getVersion().then(setAppVersion).catch(() => { });
-    
-    const handleStatusChange = (e) => setUpdaterStatus(e.detail.status);
-    window.addEventListener("updater-status-change", handleStatusChange);
-    window.dispatchEvent(new CustomEvent("updater-status-request"));
-    
-    return () => window.removeEventListener("updater-status-change", handleStatusChange);
-  }, []);
 
   return (
     <div className="flex flex-col h-full overflow-y-auto p-8 gap-6 max-w-4xl">
@@ -131,114 +60,37 @@ function OverviewTab({ workspace, collection, storagePath, envVars, onNavigate }
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        { }
+        { /* ... */ }
         <Card
-          className="group relative overflow-hidden border-border/20 bg-background/50 p-6 shadow-sm transition-all hover:bg-card/80 hover:shadow-md cursor-pointer"
-          onClick={() => onNavigate("Environments", "collection")}
+          className="flex flex-col flex-1 border-border/20 bg-background/50 p-5 shadow-sm transition-all hover:bg-card/80"
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-transparent pointer-events-none" />
-          <div className="relative z-10 flex flex-col h-full">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-500/10 text-green-500 shadow-inner">
-                <Globe className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-foreground text-[14px]">Environments</h3>
-                <p className="text-[11px] text-muted-foreground">Global & Collection variables</p>
-              </div>
+          <div className="flex items-center gap-3 mb-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400">
+              <FolderOpen className="h-4 w-4" />
             </div>
-
-            <div className="mt-auto flex flex-col gap-2">
-              <div
-                className="flex items-center justify-between rounded-lg bg-accent/30 px-3 py-2 text-[12px] transition-colors hover:bg-accent/50"
-                onClick={(e) => { e.stopPropagation(); onNavigate("Environments", "collection"); }}
-              >
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <FolderOpen className="h-4 w-4 text-blue-400" /> Collection Scope
-                </div>
-                <span className="font-medium text-foreground">{collectionCount}</span>
-              </div>
-              <div
-                className="flex items-center justify-between rounded-lg bg-accent/30 px-3 py-2 text-[12px] transition-colors hover:bg-accent/50"
-                onClick={(e) => { e.stopPropagation(); onNavigate("Environments", "workspace"); }}
-              >
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Globe className="h-4 w-4 text-teal-400" /> Workspace Global
-                </div>
-                <span className="font-medium text-foreground">{globalCount}</span>
-              </div>
-            </div>
+            <h3 className="font-semibold text-foreground text-[13px]">Storage Path</h3>
+          </div>
+          <div className="mt-auto flex items-center justify-between rounded-md bg-accent/40 px-3 py-2.5 outline outline-1 outline-border/20 group-hover:bg-accent/60 transition-colors cursor-pointer" onClick={() => invoke("reveal_item", { workspaceName: workspace?.name, collectionName: collection?.name }).catch(console.error)}>
+            <p className="font-mono text-[11px] text-muted-foreground truncate w-full group-hover:text-foreground transition-colors" title={collectionPath}>
+              {collectionPath}
+            </p>
+            <div className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/60 ml-2 whitespace-nowrap">Open</div>
           </div>
         </Card>
 
-        { }
-        <div className="flex flex-col gap-4">
-          <Card className="flex flex-col flex-1 border-border/20 bg-background/50 p-5 shadow-sm transition-all hover:bg-card/80">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400">
-                <FolderOpen className="h-4 w-4" />
+        <Card className="flex flex-col flex-1 border-border/20 bg-background/50 p-5 shadow-sm transition-all hover:bg-card/80">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-500/10 text-purple-400">
+                <Layers className="h-4 w-4" />
               </div>
-              <h3 className="font-semibold text-foreground text-[13px]">Storage Path</h3>
+              <h3 className="font-semibold text-foreground text-[13px]">Total Requests</h3>
             </div>
-            <div className="mt-auto flex items-center justify-between rounded-md bg-accent/40 px-3 py-2.5 outline outline-1 outline-border/20 group-hover:bg-accent/60 transition-colors cursor-pointer" onClick={() => invoke("reveal_item", { workspaceName: workspace?.name, collectionName: collection?.name }).catch(console.error)}>
-              <p className="font-mono text-[11px] text-muted-foreground truncate w-full group-hover:text-foreground transition-colors" title={collectionPath}>
-                {collectionPath}
-              </p>
-              <div className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground/60 ml-2 whitespace-nowrap">Open</div>
-            </div>
-          </Card>
-
-          <Card className="flex flex-col flex-1 border-border/20 bg-background/50 p-5 shadow-sm transition-all hover:bg-card/80">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-500/10 text-purple-400">
-                  <Layers className="h-4 w-4" />
-                </div>
-                <h3 className="font-semibold text-foreground text-[13px]">Total Requests</h3>
-              </div>
-              <div className="text-2xl font-bold tracking-tight text-foreground/90">{requestCount}</div>
-            </div>
-          </Card>
-          <Card className="flex flex-col flex-1 border-border/20 bg-background/50 p-5 shadow-sm transition-all hover:bg-card/80">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
-                  <RefreshCw className="h-4 w-4" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-foreground text-[13px]">Software Update</h3>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">Current Version: v{appVersion}</p>
-                </div>
-              </div>
-              {updaterStatus === "available" ? (
-                <Button
-                  size="sm"
-                  className="h-8 text-[11.5px] px-4 gap-2 bg-teal-500/20 hover:bg-teal-500/30 text-teal-500 font-medium rounded shadow-none border-0"
-                  onClick={() => window.dispatchEvent(new CustomEvent('manual-update-install'))}
-                >
-                  <RefreshCw className="h-3 w-3" />
-                  Restart to Update
-                </Button>
-              ) : updaterStatus === "downloading" ? (
-                <Button variant="secondary" size="sm" disabled className="h-8 text-[11.5px] px-4 gap-2">
-                  <RefreshCw className="h-3 w-3 animate-spin" />
-                  Updating...
-                </Button>
-              ) : (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="h-8 text-[11.5px] border-border/40 hover:bg-accent/50 transition-colors"
-                  onClick={() => window.dispatchEvent(new CustomEvent('manual-update-check'))}
-                >
-                  Check for Updates
-                </Button>
-              )}
-            </div>
-          </Card>
-        </div>
-
+            <div className="text-2xl font-bold tracking-tight text-foreground/90">{requestCount}</div>
+          </div>
+        </Card>
       </div>
+
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { Updater } from "@/components/Updater.jsx";
 import { WorkspaceView } from "@/components/workspace/WorkspaceView.jsx";
 import { WorkspaceModal } from "@/components/workspace/WorkspaceModal.jsx";
 import { CollectionSettingsPage } from "@/components/workspace/CollectionSettingsPage.jsx";
+import { AppSettingsPage } from "@/components/workspace/AppSettingsPage.jsx";
 import { Button } from "@/components/ui/button.jsx";
 import { useTheme } from "@/hooks/use-theme.js";
 import { useWorkspaceStore } from "@/hooks/use-workspace-store.js";
@@ -110,14 +111,32 @@ export default function App() {
 
   function handleSelectRequest(workspaceName, collectionName, requestName) {
     setForcedView(null);
+    handleSidebarTabChange("requests");
     refreshEnvVars();
     selectRequest(workspaceName, collectionName, requestName);
   }
 
   function openCollectionSettings(tab = "Overview", envTab = "workspace") {
     setSettingsConfig({ tab, envTab });
+    handleSidebarTabChange("requests");
     setForcedView("collectionSettings");
 
+  }
+
+  function openAppSettings() {
+    handleSidebarTabChange("settings");
+    setForcedView("appSettings");
+  }
+
+  function handleSidebarTabChangeWithView(sidebarTab) {
+    handleSidebarTabChange(sidebarTab);
+    if (sidebarTab === "settings") {
+      setForcedView("appSettings");
+      return;
+    }
+    if (sidebarTab === "requests") {
+      setForcedView(null);
+    }
   }
 
   if (!isSetupComplete) {
@@ -129,13 +148,16 @@ export default function App() {
   const showNoWorkspaceState = !activeWorkspace;
   const showNoCollectionsState = activeWorkspace && activeWorkspace.collections.length === 0;
 
+  const showAppSettings = forcedView === "appSettings";
+
   const showCollectionSettings =
+    !showAppSettings &&
     !showNoWorkspaceState &&
     !showNoCollectionsState &&
     activeCollection &&
     (forcedView === "collectionSettings" || !activeRequest);
 
-  const showWorkspaceView = activeRequest && forcedView !== "collectionSettings";
+  const showWorkspaceView = !showAppSettings && activeRequest && forcedView !== "collectionSettings";
 
   const globalVarCount = envVars?.workspace?.length ?? 0;
   const collectionVarCount = envVars?.collection?.length ?? 0;
@@ -174,13 +196,14 @@ export default function App() {
             activeWorkspaceName={store.activeWorkspaceName}
             activeCollectionName={store.activeCollectionName}
             activeRequestName={store.activeRequestName}
-            onSidebarTabChange={handleSidebarTabChange}
+            onSidebarTabChange={handleSidebarTabChangeWithView}
             onSelectWorkspace={selectWorkspace}
             onSelectCollection={(wName, cName) => {
               selectCollection(wName, cName);
               openCollectionSettings("Overview");
             }}
             onOpenCollectionSettings={() => openCollectionSettings("Overview")}
+            onOpenAppSettings={openAppSettings}
             onSelectRequest={handleSelectRequest}
             onCreateWorkspace={createWorkspaceRecord}
             onRenameWorkspace={renameWorkspaceRecord}
@@ -207,7 +230,15 @@ export default function App() {
         />
 
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          {showNoWorkspaceState ? (
+          {showAppSettings ? (
+            <AppSettingsPage
+              storagePath={storagePath}
+              onStoragePathChanged={(nextPath) => {
+                setResolvedPath(nextPath);
+                window.location.reload();
+              }}
+            />
+          ) : showNoWorkspaceState ? (
             <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
               <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
                 <SquareKanban className="h-8 w-8 text-primary" />

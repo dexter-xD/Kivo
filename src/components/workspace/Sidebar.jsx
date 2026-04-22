@@ -893,13 +893,15 @@ export function Sidebar({
   onCreateWorkspace, onRenameWorkspace, onDeleteWorkspace,
   onCreateCollection, onRenameCollection, onDeleteCollection, onDuplicateCollection,
   onCreateRequest, onRenameRequest, onDeleteRequest, onDuplicateRequest, onPasteRequest, onTogglePinRequest,
-  onOpenCollectionSettings
+  onOpenCollectionSettings,
+  onOpenAppSettings,
 }) {
   return (
     <aside className={cn("grid h-full min-h-0 overflow-hidden border-r border-border/30 bg-border/20", collapsed ? "grid-cols-[52px]" : "grid-cols-[52px_minmax(0,1fr)] gap-px")}>
       <Card data-tauri-drag-region className="flex min-h-0 flex-col items-center gap-2 bg-[hsl(var(--sidebar))]/96 p-2.5 shadow-none">
         <div className="flex h-8 w-8 items-center justify-center overflow-hidden bg-card/85"><img src={iconSrc} alt="Kivo" className="h-6 w-6 object-contain" /></div>
         <Button variant={sidebarTab === "requests" ? "secondary" : "ghost"} size="icon" className="h-8 w-8" onClick={() => onSidebarTabChange("requests")}><SquareKanban className="h-4 w-4" /></Button>
+        <Button variant={sidebarTab === "settings" ? "secondary" : "ghost"} size="icon" className="h-8 w-8" onClick={() => onOpenAppSettings?.()}><Settings className="h-4 w-4" /></Button>
         <div className="mt-auto" />
       </Card>
       {!collapsed && (

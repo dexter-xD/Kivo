@@ -65,3 +65,11 @@ export function getResolvedStoragePath() {
   return invoke("get_resolved_storage_path");
 }
 
+export function validateStoragePath(path) {
+  return invoke("validate_storage_path", { path });
+}
+
+export function switchStoragePath(path, mode) {
+  return invoke("switch_storage_path", { payload: { path, mode } });
+}
+
