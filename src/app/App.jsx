@@ -15,6 +15,7 @@ import { useWorkspaceStore } from "@/hooks/use-workspace-store.js";
 import { useEnv } from "@/hooks/use-env.js";
 import { getResolvedStoragePath } from "@/lib/http-client.js";
 import { SIDEBAR_COLLAPSED_WIDTH } from "@/lib/workspace-utils.js";
+import { Toaster } from "sonner";
 import {
   Github, Globe, Layers, Moon, Settings, SquareKanban, Star, Sun,
 } from "lucide-react";
@@ -140,6 +141,15 @@ export default function App() {
   return (
     <div className="h-full overflow-hidden">
       <Updater />
+      <Toaster
+        position="top-right"
+        closeButton
+        richColors
+        theme={theme === "dark" ? "dark" : "light"}
+        toastOptions={{
+          className: "border border-border/50 bg-card/96 text-foreground shadow-xl",
+        }}
+      />
       {showWorkspaceModal && (
         <WorkspaceModal
           title="New Workspace"

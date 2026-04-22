@@ -18,6 +18,7 @@ import {
   X,
   XCircle,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button.jsx";
 import { EnvHighlightInput } from "@/components/ui/EnvHighlightInput.jsx";
@@ -284,28 +285,6 @@ function TokenStatus({ oauth }) {
   );
 }
 
-function FloatingToast({ item }) {
-  if (!item) return null;
-
-  const toneClass =
-    item.tone === "danger"
-      ? "border-danger/30 text-danger"
-      : item.tone === "warning"
-        ? "border-warning/30 text-warning"
-        : "border-success/30 text-success";
-
-  const Icon = item.tone === "danger" ? XCircle : item.tone === "warning" ? AlertTriangle : CheckCircle2;
-
-  return (
-    <div className={cn("pointer-events-none absolute right-4 top-4 z-30 max-w-[420px] border bg-background px-3 py-2 shadow-lg", toneClass)}>
-      <div className="flex items-start gap-2">
-        <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        <div className="min-w-0 text-[12px] leading-5">{item.message}</div>
-      </div>
-    </div>
-  );
-}
-
 function CodeExchangeModal({ open, oauth, envVars, onClose, onApplyCode }) {
   const [value, setValue] = useState("");
 
@@ -375,9 +354,9 @@ export function OAuth2Panel({
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [showCodeModal, setShowCodeModal] = useState(false);
-  const [toastItem, setToastItem] = useState(null);
   const [feedbackNonce, setFeedbackNonce] = useState(0);
   const hasMountedResponseRef = useRef(false);
+  const lastToastNonceRef = useRef(0);
 
   const warnings = useMemo(() => getOAuthWarnings(auth), [auth]);
   const validationErrors = useMemo(() => getOAuthValidationErrors(auth), [auth]);
@@ -397,6 +376,7 @@ export function OAuth2Panel({
 
   useEffect(() => {
     if (!feedbackNonce) return;
+    if (lastToastNonceRef.current === feedbackNonce) return;
 
     let nextTone = "";
     let nextMessage = "";
@@ -420,9 +400,20 @@ export function OAuth2Panel({
 
     if (!nextMessage) return;
 
-    setToastItem({ tone: nextTone, message: nextMessage });
-    const timer = setTimeout(() => setToastItem(null), 3200);
-    return () => clearTimeout(timer);
+    lastToastNonceRef.current = feedbackNonce;
+
+    const toastOptions = {
+      id: "oauth-panel-feedback",
+      duration: 5200,
+    };
+
+    if (nextTone === "danger") {
+      toast.error(nextMessage, toastOptions);
+    } else if (nextTone === "warning") {
+      toast.warning(nextMessage, toastOptions);
+    } else {
+      toast.success(nextMessage, toastOptions);
+    }
   }, [feedbackNonce, error, validationErrors, warnings, responseWarnings, notice]);
 
   function normalizeOAuthPatch(patch) {
@@ -552,9 +543,6 @@ export function OAuth2Panel({
         onClose={() => setShowCodeModal(false)}
         onApplyCode={(code) => updateOAuth({ authorizationCode: code })}
       />
-
-      <FloatingToast item={toastItem} />
-
       <div className="thin-scrollbar min-h-0 flex-1 overflow-auto">
         <div className="mx-auto grid max-w-[920px] gap-3 px-4 py-3.5">
           <FormRow
