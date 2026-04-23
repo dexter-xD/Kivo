@@ -248,6 +248,8 @@ pub struct RequestRecord {
     #[serde(default)]
     pub body: String,
     #[serde(default)]
+    pub graphql_variables: String,
+    #[serde(default)]
     pub docs: String,
     #[serde(default)]
     pub active_editor_tab: String,

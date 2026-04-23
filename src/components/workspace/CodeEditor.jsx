@@ -1,7 +1,7 @@
 import { useMemo, useRef } from "react";
 
 import { cn } from "@/lib/utils.js";
-import { formatJsonText, isJsonText } from "@/lib/formatters.js";
+import { isJsonText } from "@/lib/formatters.js";
 
 const tokenPattern = /("(?:\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"\s*:|"(?:\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"|\btrue\b|\bfalse\b|\bnull\b|-?\d+(?:\.\d+)?(?:[eE][+\-]?\d+)?|[{}\[\],:])/g;
 const graphqlKeywords = new Set([
@@ -154,13 +154,7 @@ export function CodeEditor({
   const isJson = language === "json" && isJsonText(value);
   const isGraphql = language === "graphql";
   const useOverlay = !readOnly && (language === "json" || language === "graphql");
-  const displayValue = useMemo(() => {
-    if (language === "json" && isJson) {
-      return formatJsonText(value);
-    }
-
-    return value || "";
-  }, [isJson, language, value]);
+  const displayValue = useMemo(() => value || "", [value]);
 
   function syncScroll(event) {
     if (!highlightRef.current) {
