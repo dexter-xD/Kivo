@@ -18,6 +18,14 @@ pub struct EnvVar {
     pub value: String,
 }
 
+fn is_default_oauth_config(value: &OAuthConfig) -> bool {
+    value == &OAuthConfig::default()
+}
+
+fn is_default_api_key_in(value: &String) -> bool {
+    value.is_empty() || value == "header"
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EnvVarsResult {
@@ -261,7 +269,7 @@ pub struct KeyValueRow {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct OAuthParamRow {
     #[serde(default)]
@@ -272,7 +280,7 @@ pub struct OAuthParamRow {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct OAuthConfig {
     #[serde(default)]
@@ -361,19 +369,19 @@ impl Default for OAuthConfig {
 pub struct AuthRecord {
     #[serde(rename = "type")]
     pub auth_type: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub token: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub username: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub password: String,
-    #[serde(default, rename = "apiKeyName")]
+    #[serde(default, rename = "apiKeyName", skip_serializing_if = "String::is_empty")]
     pub api_key_name: String,
-    #[serde(default, rename = "apiKeyValue")]
+    #[serde(default, rename = "apiKeyValue", skip_serializing_if = "String::is_empty")]
     pub api_key_value: String,
-    #[serde(default, rename = "apiKeyIn")]
+    #[serde(default, rename = "apiKeyIn", skip_serializing_if = "is_default_api_key_in")]
     pub api_key_in: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_default_oauth_config")]
     pub oauth2: OAuthConfig,
 }
 

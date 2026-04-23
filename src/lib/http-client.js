@@ -20,6 +20,47 @@ export function loadAppState() {
   return invoke("load_app_state");
 }
 
+function sanitizeAuthForSave(auth) {
+  const authType = String(auth?.type || "none");
+
+  if (authType === "none" || authType === "inherit") {
+    return { type: authType };
+  }
+
+  if (authType === "bearer") {
+    return {
+      type: "bearer",
+      token: String(auth?.token ?? "")
+    };
+  }
+
+  if (authType === "basic") {
+    return {
+      type: "basic",
+      username: String(auth?.username ?? ""),
+      password: String(auth?.password ?? "")
+    };
+  }
+
+  if (authType === "apikey") {
+    return {
+      type: "apikey",
+      apiKeyName: String(auth?.apiKeyName ?? ""),
+      apiKeyValue: String(auth?.apiKeyValue ?? ""),
+      apiKeyIn: String(auth?.apiKeyIn ?? "header")
+    };
+  }
+
+  if (authType === "oauth2") {
+    return {
+      type: "oauth2",
+      oauth2: auth?.oauth2 && typeof auth.oauth2 === "object" ? auth.oauth2 : {}
+    };
+  }
+
+  return { type: "none" };
+}
+
 export function saveAppState(payload) {
   const cleanPayload = {
     ...payload,
@@ -29,6 +70,7 @@ export function saveAppState(payload) {
         ...collection,
         requests: collection.requests?.map((request) => ({
           ...request,
+          auth: sanitizeAuthForSave(request?.auth),
           lastResponse: null
         }))
       }))
