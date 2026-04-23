@@ -29,7 +29,7 @@ function sanitizeRequestForSave(request) {
   } else if (bodyType === "file") {
     sanitized.bodyFilePath = String(request?.bodyFilePath ?? "");
   } else if (bodyType === "graphql") {
-    sanitized.body = typeof request?.body === "string" ? request.body : "";
+    sanitized.body = sanitizeRequestBodyForSave(request);
     sanitized.graphqlVariables = sanitizeGraphqlVariablesForSave(request);
   } else if (bodyType !== "none") {
     sanitized.body = sanitizeRequestBodyForSave(request);
@@ -122,28 +122,11 @@ function sanitizeRequestBodyForSave(request) {
   const raw = request?.body;
   const bodyType = request?.bodyType;
 
-  if (bodyType === "graphql") {
+  if (bodyType === "graphql" || bodyType === "json") {
     return raw;
   }
 
-  if (bodyType !== "json") {
-    return raw;
-  }
-
-  if (typeof raw !== "string") {
-    return raw;
-  }
-
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return {};
-  }
-
-  try {
-    return JSON.parse(trimmed);
-  } catch {
-    return raw;
-  }
+  return raw;
 }
 
 export function saveAppState(payload) {
