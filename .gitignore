@@ -11,3 +11,4 @@ desktop/target/
 
 # mock servers
 /oauth-mock-server/
+/collection-examples/

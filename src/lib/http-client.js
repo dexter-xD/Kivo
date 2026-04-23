@@ -21,6 +21,11 @@ function sanitizeRequestForSave(request) {
     activeResponseTab: String(request?.activeResponseTab ?? "Body"),
     responseBodyView: String(request?.responseBodyView ?? "JSON"),
     inheritHeaders: request?.inheritHeaders ?? true,
+    tags: Array.isArray(request?.tags) ? request.tags.map((tag) => String(tag)) : [],
+    urlEncoding: request?.urlEncoding ?? true,
+    followRedirects: request?.followRedirects ?? true,
+    maxRedirects: Number.isFinite(request?.maxRedirects) ? Number(request.maxRedirects) : 5,
+    timeoutMs: Number.isFinite(request?.timeoutMs) ? Number(request.timeoutMs) : 0,
     lastResponse: null
   };
 

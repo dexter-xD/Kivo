@@ -12,7 +12,7 @@ import { getMethodTone, requestBodyModes } from "@/lib/http-ui.js";
 import { cn } from "@/lib/utils.js";
 import { EnvHighlightInput } from "@/components/ui/EnvHighlightInput.jsx";
 
-const tabs = ["Params", "Body", "Auth", "Headers", "Docs"];
+const tabs = ["Params", "Body", "Auth", "Headers", "Docs", "Settings"];
 const requestMethods = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
 const authModes = [
   { value: "none", label: "No Auth" },
@@ -25,6 +25,94 @@ const authModes = [
 
 function createRow() {
   return { id: `row-${Math.random().toString(36).slice(2, 8)}`, key: "", value: "", enabled: true };
+}
+
+function RequestSettingsPanel({ state, onChange }) {
+  const tagsText = Array.isArray(state.tags) ? state.tags.join(", ") : "";
+
+  function handleTagsChange(value) {
+    const tags = value
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+    onChange("tags", tags);
+  }
+
+  return (
+    <div className="h-full min-h-0 overflow-hidden text-[12px] text-muted-foreground">
+      <div className="h-full thin-scrollbar overflow-auto px-3 py-3">
+        <div className="grid max-w-[720px] gap-4">
+          <p className="text-[13px] text-muted-foreground">Configure request settings for this item.</p>
+
+          <div className="grid gap-2">
+            <label className="text-[10px] uppercase tracking-[0.18em]">Tags</label>
+            <Input
+              value={tagsText}
+              onChange={(event) => handleTagsChange(event.target.value)}
+              placeholder="e.g., create, update"
+              className="h-10 border-border/40 bg-background/20"
+            />
+          </div>
+
+          <div className="grid gap-3 border border-border/30 bg-background/10 p-3">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-[12px] font-medium text-foreground">URL Encoding</div>
+                <p className="text-[12px] text-muted-foreground">Automatically encode query parameters in the URL.</p>
+              </div>
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 accent-primary"
+                checked={state.urlEncoding ?? true}
+                onChange={(event) => onChange("urlEncoding", event.target.checked)}
+              />
+            </div>
+
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-[12px] font-medium text-foreground">Automatically Follow Redirects</div>
+                <p className="text-[12px] text-muted-foreground">Follow HTTP redirects automatically.</p>
+              </div>
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 accent-primary"
+                checked={state.followRedirects ?? true}
+                onChange={(event) => onChange("followRedirects", event.target.checked)}
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <label className="text-[10px] uppercase tracking-[0.18em]">Max Redirects</label>
+              <Input
+                type="number"
+                min={0}
+                value={Number.isFinite(state.maxRedirects) ? state.maxRedirects : 5}
+                onChange={(event) => {
+                  const value = Number.parseInt(event.target.value, 10);
+                  onChange("maxRedirects", Number.isFinite(value) && value >= 0 ? value : 0);
+                }}
+                className="h-10 border-border/40 bg-background/20 max-w-[180px]"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <label className="text-[10px] uppercase tracking-[0.18em]">Timeout (ms)</label>
+              <Input
+                type="number"
+                min={0}
+                value={Number.isFinite(state.timeoutMs) ? state.timeoutMs : 0}
+                onChange={(event) => {
+                  const value = Number.parseInt(event.target.value, 10);
+                  onChange("timeoutMs", Number.isFinite(value) && value >= 0 ? value : 0);
+                }}
+                className="h-10 border-border/40 bg-background/20 max-w-[180px]"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function TableEditor({
@@ -758,6 +846,10 @@ export function RequestPane({
               placeholder="Request notes, examples, reminders..."
             />
           </div>
+        ) : null}
+
+        {activeTab === "Settings" ? (
+          <RequestSettingsPanel state={state} onChange={onChange} />
         ) : null}
       </div>
     </Card>

@@ -59,6 +59,11 @@ export function createRequest(name = "New Request") {
     activeResponseTab: "Body",
     responseBodyView: "JSON",
     inheritHeaders: true,
+    tags: [],
+    urlEncoding: true,
+    followRedirects: true,
+    maxRedirects: 5,
+    timeoutMs: 0,
     lastResponse: null
   };
 }
@@ -159,6 +164,11 @@ export function normalizeRequestRecord(request) {
     bodyRows: Array.isArray(request?.bodyRows) ? request.bodyRows : [],
     bodyFilePath: typeof request?.bodyFilePath === "string" ? request.bodyFilePath : "",
     graphqlVariables: normalizedGraphqlVariables,
+    tags: Array.isArray(request?.tags) ? request.tags.map((tag) => String(tag)) : [],
+    urlEncoding: request?.urlEncoding ?? true,
+    followRedirects: request?.followRedirects ?? true,
+    maxRedirects: Number.isFinite(request?.maxRedirects) ? Number(request.maxRedirects) : 5,
+    timeoutMs: Number.isFinite(request?.timeoutMs) ? Number(request.timeoutMs) : 0,
     auth: normalizeAuthState(request?.auth)
   };
 }
@@ -170,6 +180,7 @@ export function cloneRequest(request) {
     queryParams: (request.queryParams || []).map((row) => ({ ...row })),
     headers: (request.headers || []).map((row) => ({ ...row })),
     bodyRows: (request.bodyRows || []).map((row) => ({ ...row })),
+    tags: (request.tags || []).map((tag) => String(tag)),
     auth: normalizeAuthState(request.auth),
     lastResponse: request.lastResponse ? { ...request.lastResponse } : null
   };

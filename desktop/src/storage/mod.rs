@@ -67,6 +67,14 @@ fn default_auth_record() -> AuthRecord {
     }
 }
 
+fn default_true() -> bool {
+    true
+}
+
+fn default_max_redirects() -> u32 {
+    5
+}
+
 impl Default for CollectionConfig {
     fn default() -> Self {
         CollectionConfig {
@@ -272,6 +280,16 @@ pub struct RequestRecord {
     pub graphql_variables: RequestTextOrJson,
     #[serde(default)]
     pub docs: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
+    #[serde(default = "default_true")]
+    pub url_encoding: bool,
+    #[serde(default = "default_true")]
+    pub follow_redirects: bool,
+    #[serde(default = "default_max_redirects")]
+    pub max_redirects: u32,
+    #[serde(default)]
+    pub timeout_ms: u64,
     #[serde(default)]
     pub active_editor_tab: String,
     #[serde(default)]
