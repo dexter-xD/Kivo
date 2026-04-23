@@ -16,20 +16,6 @@ All notable changes to this project will be documented in this file.
 
 **Author**: dexter-xD, Now part of DevlogZz.
 
-## [0.4.1]. 2026-04-23
-
-### v0.4.1: Folder Hierarchy, Settings, and Workflow Refinements
-- **feat**: add collection folders with nested structure support
-- **feat**: add request settings improvements and folder-level controls
-- **feat**: add folder menu parity with copy/paste and show-in-files actions
-- **feat**: add collection-level folder paste support for cross-collection workflows
-- **fix**: preserve scope body state and stabilize JSON persistence
-- **fix**: persist and normalize GraphQL body/variables more reliably
-- **fix**: trim auth payload values before save/send
-- **chore**: restore newline storage handling
-
-**Author**: dexter-xD, Now part of DevlogZz.
-
 ## [0.4.0]. 2026-04-22
 
 ### v0.4.0: OAuth 2.0 Integration & Modernized Workspace
