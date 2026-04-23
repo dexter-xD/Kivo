@@ -185,3 +185,29 @@ export function switchStoragePath(path, mode) {
   return invoke("switch_storage_path", { payload: { path, mode } });
 }
 
+export function importCollectionFile(filePath) {
+  return invoke("import_collection_file", { filePath });
+}
+
+export function importRequestFile(filePath) {
+  return invoke("import_request_file", { filePath });
+}
+
+export function exportCollectionFile(filePath, format, name, collection) {
+  return invoke("export_collection_file", {
+    filePath,
+    format,
+    name,
+    collection,
+  });
+}
+
+export function exportRequestFile(filePath, format, name, request) {
+  return invoke("export_request_file", {
+    filePath,
+    format,
+    name,
+    request,
+  });
+}
+

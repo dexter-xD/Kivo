@@ -5,8 +5,9 @@ mod storage;
 
 use http::client::{cancel_http_request, cancel_oauth_exchange, oauth_exchange_token, send_http_request};
 use storage::{
+    export_collection_file, export_request_file,
     get_app_config, get_default_storage_path, get_env_vars, get_resolved_storage_path,
-    get_collection_config, load_app_state, open_config_directory, reveal_item, save_app_state,
+    get_collection_config, import_collection_file, import_request_file, load_app_state, open_config_directory, reveal_item, save_app_state,
     save_collection_config, save_env_vars, set_storage_path, switch_storage_path,
     validate_storage_path,
 };
@@ -36,6 +37,10 @@ fn main() {
             get_collection_config,
             save_collection_config,
             get_resolved_storage_path,
+            import_collection_file,
+            import_request_file,
+            export_collection_file,
+            export_request_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

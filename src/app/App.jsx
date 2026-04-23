@@ -94,6 +94,8 @@ export default function App() {
     updateActiveRequest,
     checkSetup,
     duplicateCollectionRecord,
+    importCollectionRecord,
+    importRequestRecords,
   } = useWorkspaceStore();
 
   const [resolvedPath, setResolvedPath] = useState(null);
@@ -217,6 +219,7 @@ export default function App() {
             onRenameCollection={renameCollectionRecord}
             onDeleteCollection={deleteCollectionRecord}
             onDuplicateCollection={duplicateCollectionRecord}
+            onImportCollection={importCollectionRecord}
             onCreateFolder={createFolderRecord}
             onRenameFolder={renameFolderRecord}
             onDeleteFolder={deleteFolderRecord}
@@ -225,6 +228,7 @@ export default function App() {
             onRenameRequest={renameRequestRecord}
             onDeleteRequest={deleteRequestRecord}
             onDuplicateRequest={duplicateRequestRecord}
+            onImportRequests={importRequestRecords}
             onPasteRequest={pasteRequestRecord}
             onPasteFolder={pasteFolderRecord}
             onTogglePinRequest={togglePinRequestRecord}

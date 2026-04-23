@@ -289,6 +289,114 @@ export function useWorkspaceStore() {
     });
   }
 
+  function importCollectionRecord(workspaceName, importedCollection) {
+    updateStore((current) => {
+      const workspace = current.workspaces.find((w) => w.name === workspaceName);
+      if (!workspace || !importedCollection) return current;
+
+      const existingNames = workspace.collections.map((c) => c.name);
+      const nextName = getUniqueName(
+        String(importedCollection.name || "Imported Collection").trim() || "Imported Collection",
+        existingNames
+      );
+
+      const normalizedRequests = Array.isArray(importedCollection.requests)
+        ? importedCollection.requests.map((request) => ({
+          ...request,
+          folderPath: normalizeFolderPath(request.folderPath)
+        }))
+        : [];
+
+      const folderSet = new Set(
+        Array.isArray(importedCollection.folders)
+          ? importedCollection.folders.map((path) => normalizeFolderPath(path)).filter(Boolean)
+          : []
+      );
+      for (const request of normalizedRequests) {
+        if (request.folderPath) {
+          getFolderAncestors(request.folderPath).forEach((path) => folderSet.add(path));
+        }
+      }
+
+      const nextCollection = {
+        ...createCollection(nextName),
+        ...importedCollection,
+        name: nextName,
+        requests: orderRequests(normalizedRequests),
+        folders: Array.from(folderSet),
+        folderSettings: Array.isArray(importedCollection.folderSettings) ? importedCollection.folderSettings : [],
+      };
+
+      return {
+        ...current,
+        activeWorkspaceName: workspaceName,
+        activeCollectionName: nextCollection.name,
+        activeRequestName: nextCollection.requests[0]?.name || "",
+        workspaces: current.workspaces.map((ws) => {
+          if (ws.name !== workspaceName) return ws;
+          return {
+            ...ws,
+            collections: [...ws.collections, nextCollection]
+          };
+        })
+      };
+    });
+  }
+
+  function importRequestRecords(workspaceName, collectionName, importedRequests, targetFolderPath = "") {
+    const normalizedTargetFolderPath = normalizeFolderPath(targetFolderPath);
+    updateStore((current) => {
+      const workspace = current.workspaces.find((w) => w.name === workspaceName);
+      const collection = workspace?.collections.find((c) => c.name === collectionName);
+      if (!collection || !Array.isArray(importedRequests) || importedRequests.length === 0) {
+        return current;
+      }
+
+      const existingNames = collection.requests.map((request) => request.name);
+      const requestsToInsert = importedRequests.map((request) => {
+        const name = getUniqueName(String(request?.name || "Imported Request").trim() || "Imported Request", existingNames);
+        existingNames.push(name);
+        const importedFolderPath = normalizeFolderPath(request?.folderPath);
+        const folderPath = normalizedTargetFolderPath || importedFolderPath;
+        return {
+          ...createRequest(name),
+          ...request,
+          name,
+          folderPath,
+        };
+      });
+
+      const folderSet = new Set(Array.isArray(collection.folders) ? collection.folders : []);
+      for (const req of requestsToInsert) {
+        if (req.folderPath) {
+          getFolderAncestors(req.folderPath).forEach((path) => folderSet.add(path));
+        }
+      }
+
+      return {
+        ...current,
+        activeWorkspaceName: workspaceName,
+        activeCollectionName: collectionName,
+        activeRequestName: requestsToInsert[0]?.name || current.activeRequestName,
+        workspaces: current.workspaces.map((ws) => {
+          if (ws.name !== workspaceName) return ws;
+          return {
+            ...ws,
+            collections: ws.collections.map((col) => {
+              if (col.name !== collectionName) return col;
+              return {
+                ...col,
+                requests: orderRequests([...(col.requests || []), ...requestsToInsert]),
+                folders: Array.from(folderSet),
+                openRequestNames: [...(col.openRequestNames || []), ...requestsToInsert.map((r) => r.name)]
+              };
+            })
+          };
+        })
+      };
+    });
+  }
+
   function pasteFolderRecord(workspaceName, collectionName, folderSnapshot, targetParentPath = "") {
     const snapshot = folderSnapshot && typeof folderSnapshot === "object" ? folderSnapshot : null;
     if (!snapshot?.rootName) {
@@ -1260,6 +1368,8 @@ export function useWorkspaceStore() {
     renameCollectionRecord,
     deleteCollectionRecord,
     duplicateCollectionRecord,
+    importCollectionRecord,
+    importRequestRecords,
     createFolderRecord,
     renameFolderRecord,
     deleteFolderRecord,

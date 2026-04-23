@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, ChevronRight, Code2, Copy, Folder, FolderKanban, FolderPlus, Layers, MoreVertical, Pencil, Pin, Plus, Search, Settings, SquareKanban, Trash2, X } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
+import { open, save } from "@tauri-apps/plugin-dialog";
 
 import { CodeEditor } from "@/components/workspace/CodeEditor.jsx";
 import { Button } from "@/components/ui/button.jsx";
@@ -9,7 +10,7 @@ import { Card } from "@/components/ui/card.jsx";
 import { Input } from "@/components/ui/input.jsx";
 import { EnvHighlightInput } from "@/components/ui/EnvHighlightInput.jsx";
 import { OAuth2Panel } from "@/components/workspace/OAuth2Panel.jsx";
-import { getCollectionConfig, getEnvVars } from "@/lib/http-client.js";
+import { exportCollectionFile, exportRequestFile, getCollectionConfig, getEnvVars, importCollectionFile, importRequestFile } from "@/lib/http-client.js";
 import { buildCurlCommand, codegenLanguageOptions, generateCodeSnippet, getMethodTone } from "@/lib/http-ui.js";
 import { createDefaultAuthState, normalizeAuthState } from "@/lib/oauth.js";
 import { cn } from "@/lib/utils.js";
@@ -31,6 +32,123 @@ function normalizeFolderPath(path) {
     .map((segment) => segment.trim())
     .filter(Boolean)
     .join("/");
+}
+
+const IMPORT_EXPORT_FORMATS = [
+  { value: "postman", label: "Postman (JSON)", extension: "json" },
+  { value: "openapi3.0", label: "OpenAPI 3.0", extension: "json" },
+  { value: "swagger2.0", label: "Swagger 2.0", extension: "json" },
+  { value: "bruno", label: "Bruno (YAML)", extension: "yml" },
+];
+
+function ImportExportModal({ open: isOpen, mode, scope, targetName, defaultFileName, onClose, onConfirm }) {
+  const [filePath, setFilePath] = useState("");
+  const [format, setFormat] = useState("postman");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setFilePath("");
+    setFormat("postman");
+    setIsSubmitting(false);
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const modeLabel = mode === "import" ? "Import" : "Export";
+  const scopeLabel = scope === "request" ? "Request" : "Collection";
+
+  async function handleBrowse() {
+    if (mode === "import") {
+      const selected = await open({
+        multiple: false,
+        directory: false,
+        filters: [{ name: "Collection/Request files", extensions: ["json", "yaml", "yml"] }],
+      });
+      if (typeof selected === "string") {
+        setFilePath(selected);
+      }
+      return;
+    }
+
+    const selectedFormat = IMPORT_EXPORT_FORMATS.find((item) => item.value === format) || IMPORT_EXPORT_FORMATS[0];
+    const selected = await save({
+      defaultPath: `${defaultFileName || targetName || scopeLabel}.${selectedFormat.extension}`,
+      filters: [{ name: selectedFormat.label, extensions: [selectedFormat.extension] }],
+    });
+    if (typeof selected === "string") {
+      setFilePath(selected);
+    }
+  }
+
+  async function handleSubmit() {
+    if (!filePath.trim()) return;
+    setIsSubmitting(true);
+    try {
+      await onConfirm({ filePath, format });
+      onClose();
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-[240] flex items-center justify-center bg-background/70 p-6 backdrop-blur-sm" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <Card className="w-[min(680px,92vw)] border border-border/50 bg-card/95 p-5 shadow-2xl">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h3 className="text-[17px] font-semibold text-foreground">{modeLabel} {scopeLabel}</h3>
+            <p className="text-[12px] text-muted-foreground">{targetName || `Selected ${scopeLabel.toLowerCase()}`}</p>
+          </div>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}><X className="h-4 w-4" /></Button>
+        </div>
+
+        {mode === "export" ? (
+          <div className="mb-3 grid gap-2">
+            <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Format</label>
+            <select value={format} onChange={(event) => setFormat(event.target.value)} className="h-10 border border-border/40 bg-background/50 px-3 text-[13px] text-foreground outline-none">
+              {IMPORT_EXPORT_FORMATS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+            </select>
+          </div>
+        ) : null}
+
+        <div className="mb-3 grid gap-2">
+          <label className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{mode === "import" ? "File" : "Save location"}</label>
+          <div className="flex gap-2">
+            <Input
+              value={filePath}
+              onChange={(event) => setFilePath(event.target.value)}
+              placeholder={mode === "import" ? "Choose a JSON/YAML file" : "Choose output file path"}
+              className="h-10"
+            />
+            <Button variant="outline" type="button" className="h-10" onClick={handleBrowse}>Browse</Button>
+          </div>
+        </div>
+
+        {mode === "import" ? (
+          <div
+            className="mb-4 flex h-28 items-center justify-center border border-dashed border-border/40 bg-accent/10 text-[12px] text-muted-foreground"
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault();
+              const droppedPath = event.dataTransfer?.files?.[0]?.path;
+              if (droppedPath) setFilePath(droppedPath);
+            }}
+          >
+            Drop file here or use Browse
+          </div>
+        ) : null}
+
+        <div className="flex items-center justify-end gap-2">
+          <Button variant="ghost" type="button" className="h-9" onClick={onClose}>Cancel</Button>
+          <Button type="button" className="h-9" onClick={handleSubmit} disabled={isSubmitting || !filePath.trim()}>
+            {isSubmitting ? "Processing..." : `${modeLabel} ${scopeLabel}`}
+          </Button>
+        </div>
+      </Card>
+    </div>,
+    document.body
+  );
 }
 
 function getFolderParentPath(path) {
@@ -500,7 +618,7 @@ function GenerateCodeModal({ request, language, context, isLoadingContext, onLan
   );
 }
 
-function RequestContextMenu({ menu, onGenerateCode, onCopyCurl, onRename, onDuplicate, onCopy, onPaste, onReveal, onTogglePin, onDelete, onClose, canPaste }) {
+function RequestContextMenu({ menu, onGenerateCode, onCopyCurl, onRename, onDuplicate, onCopy, onPaste, onExportRequest, onReveal, onTogglePin, onDelete, onClose, canPaste }) {
   useEffect(() => {
     if (!menu) return;
     function handlePointer() { onClose(); }
@@ -537,6 +655,9 @@ function RequestContextMenu({ menu, onGenerateCode, onCopyCurl, onRename, onDupl
       <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-foreground hover:bg-accent/45" onClick={() => { onDuplicate(menu.workspaceName, menu.collectionName, menu.requestName); onClose(); }}>
         <Copy className="h-3.5 w-3.5" /> Duplicate
       </button>
+      <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-foreground hover:bg-accent/45" onClick={() => { onExportRequest(menu.workspaceName, menu.collectionName, menu.requestName); onClose(); }}>
+        <Copy className="h-3.5 w-3.5" /> Export Request
+      </button>
       <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-foreground hover:bg-accent/45" onClick={() => { onReveal(menu.workspaceName, menu.collectionName, menu.requestName); onClose(); }}>
         <FolderKanban className="h-3.5 w-3.5" /> Show in Files
       </button>
@@ -549,7 +670,7 @@ function RequestContextMenu({ menu, onGenerateCode, onCopyCurl, onRename, onDupl
   );
 }
 
-function CollectionContextMenu({ menu, onCreateRequest, onCreateFolder, onRename, onDuplicate, onPaste, onReveal, onDelete, onClose, canPaste, onOpenSettings }) {
+function CollectionContextMenu({ menu, onCreateRequest, onCreateFolder, onRename, onDuplicate, onPaste, onImportCollection, onImportRequest, onExportCollection, onReveal, onDelete, onClose, canPaste, onOpenSettings }) {
   useEffect(() => {
     if (!menu) return;
     function handlePointer() { onClose(); }
@@ -583,6 +704,15 @@ function CollectionContextMenu({ menu, onCreateRequest, onCreateFolder, onRename
       <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-foreground hover:bg-accent/45" onClick={() => { onDuplicate(menu.workspaceName, menu.collectionName); onClose(); }}>
         <Copy className="h-3.5 w-3.5" /> Duplicate
       </button>
+      <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-foreground hover:bg-accent/45" onClick={() => { onImportRequest(menu.workspaceName, menu.collectionName, ""); onClose(); }}>
+        <Plus className="h-3.5 w-3.5" /> Import Request
+      </button>
+      <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-foreground hover:bg-accent/45" onClick={() => { onImportCollection(menu.workspaceName); onClose(); }}>
+        <Plus className="h-3.5 w-3.5" /> Import Collection
+      </button>
+      <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-foreground hover:bg-accent/45" onClick={() => { onExportCollection(menu.workspaceName, menu.collectionName); onClose(); }}>
+        <Copy className="h-3.5 w-3.5" /> Export Collection
+      </button>
       <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-foreground hover:bg-accent/45" onClick={() => { onReveal(menu.workspaceName, menu.collectionName); onClose(); }}>
         <FolderKanban className="h-3.5 w-3.5" /> Show in Files
       </button>
@@ -606,6 +736,7 @@ export function RequestsView({
   onRenameCollection,
   onDeleteCollection,
   onDuplicateCollection,
+  onImportCollection,
   onCreateFolder,
   onRenameFolder,
   onDeleteFolder,
@@ -614,6 +745,7 @@ export function RequestsView({
   onRenameRequest,
   onDeleteRequest,
   onDuplicateRequest,
+  onImportRequests,
   onPasteRequest,
   onPasteFolder,
   onTogglePinRequest
@@ -643,9 +775,32 @@ export function RequestsView({
   const [folderContextMenu, setFolderContextMenu] = useState(null);
   const [folderSettingsTarget, setFolderSettingsTarget] = useState(null);
   const [folderSettingsEnv, setFolderSettingsEnv] = useState({ merged: {} });
+  const [sidebarOptionsOpen, setSidebarOptionsOpen] = useState(false);
+  const [importExportState, setImportExportState] = useState(null);
+  const sidebarOptionsRef = useRef(null);
 
   const activeWorkspace = useMemo(() => workspaces.find(w => w.name === activeWorkspaceName), [workspaces, activeWorkspaceName]);
   const effectiveWorkspaceName = activeWorkspace?.name ?? "";
+
+  useEffect(() => {
+    if (!sidebarOptionsOpen) return;
+    function handlePointer(event) {
+      if (sidebarOptionsRef.current && !sidebarOptionsRef.current.contains(event.target)) {
+        setSidebarOptionsOpen(false);
+      }
+    }
+    function handleEscape(event) {
+      if (event.key === "Escape") {
+        setSidebarOptionsOpen(false);
+      }
+    }
+    window.addEventListener("mousedown", handlePointer);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      window.removeEventListener("mousedown", handlePointer);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [sidebarOptionsOpen]);
 
   const codegenRequest = useMemo(() => {
     if (!codegenTarget) return null;
@@ -881,6 +1036,62 @@ export function RequestsView({
     }
   }
 
+  async function handleImportCollection(workspaceName) {
+    setImportExportState({ mode: "import", scope: "collection", workspaceName, collectionName: null, requestName: null, targetFolderPath: "" });
+  }
+
+  function handleImportRequest(workspaceName, collectionName, folderPath = "") {
+    setImportExportState({ mode: "import", scope: "request", workspaceName, collectionName, requestName: null, targetFolderPath: normalizeFolderPath(folderPath) });
+  }
+
+  function handleExportCollection(workspaceName, collectionName) {
+    setImportExportState({ mode: "export", scope: "collection", workspaceName, collectionName, requestName: null, targetFolderPath: "" });
+  }
+
+  function handleExportRequest(workspaceName, collectionName, requestName) {
+    setImportExportState({ mode: "export", scope: "request", workspaceName, collectionName, requestName, targetFolderPath: "" });
+  }
+
+  async function handleSubmitImportExport(payload) {
+    if (!importExportState) return;
+    const { mode, scope, workspaceName, collectionName, requestName, targetFolderPath } = importExportState;
+
+    if (mode === "import" && scope === "collection") {
+      const imported = await importCollectionFile(payload.filePath);
+      onImportCollection(workspaceName, imported.collection);
+      setFeedbackMessage(`Imported collection (${imported.detectedFormat || "auto"}).`);
+      setTimeout(() => setFeedbackMessage(""), 2200);
+      return;
+    }
+
+    if (mode === "import" && scope === "request") {
+      const imported = await importRequestFile(payload.filePath);
+      onImportRequests(workspaceName, collectionName, imported.requests || [], targetFolderPath);
+      setFeedbackMessage(`Imported ${(imported.requests || []).length} request(s).`);
+      setTimeout(() => setFeedbackMessage(""), 2200);
+      return;
+    }
+
+    if (mode === "export" && scope === "collection") {
+      const collection = workspaces
+        .find((w) => w.name === workspaceName)
+        ?.collections?.find((c) => c.name === collectionName);
+      if (!collection) return;
+      await exportCollectionFile(payload.filePath, payload.format, collection.name, collection);
+      setFeedbackMessage(`Exported collection (${payload.format}).`);
+      setTimeout(() => setFeedbackMessage(""), 2200);
+      return;
+    }
+
+    if (mode === "export" && scope === "request") {
+      const request = getRequestRecord(workspaces, workspaceName, collectionName, requestName);
+      if (!request) return;
+      await exportRequestFile(payload.filePath, payload.format, request.name, request);
+      setFeedbackMessage(`Exported request (${payload.format}).`);
+      setTimeout(() => setFeedbackMessage(""), 2200);
+    }
+  }
+
   async function handleReveal(workspaceName, collectionName, requestName) {
     try {
       await invoke("reveal_item", {
@@ -1065,7 +1276,7 @@ export function RequestsView({
               <Layers className="h-4 w-4 text-muted-foreground" />
               <span className="text-[12px] font-semibold text-foreground">Collections</span>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="relative flex items-center gap-1" ref={sidebarOptionsRef}>
               <button
                 onClick={() => setIsSearchVisible(!isSearchVisible)}
                 className={cn("p-1 text-muted-foreground hover:bg-accent hover:text-foreground rounded transition-colors", isSearchVisible && "bg-accent text-foreground")}
@@ -1080,9 +1291,33 @@ export function RequestsView({
               >
                 <Plus className="h-4 w-4" />
               </button>
-              <button className="p-1 text-muted-foreground hover:bg-accent hover:text-foreground rounded transition-colors" title="Options">
+              <button onClick={() => setSidebarOptionsOpen((prev) => !prev)} className="p-1 text-muted-foreground hover:bg-accent hover:text-foreground rounded transition-colors" title="Options">
                 <MoreVertical className="h-4 w-4" />
               </button>
+              {sidebarOptionsOpen && (
+                <div className="absolute right-0 top-[calc(100%+6px)] z-30 min-w-[210px] border border-border/60 bg-popover p-1 shadow-2xl">
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-foreground hover:bg-accent/45"
+                    onClick={() => {
+                      setSidebarOptionsOpen(false);
+                      setIsCreatingCollection(true);
+                    }}
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Create New Collection
+                  </button>
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-foreground hover:bg-accent/45"
+                    onClick={() => {
+                      setSidebarOptionsOpen(false);
+                      handleImportCollection(effectiveWorkspaceName);
+                    }}
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Import Collection
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1457,6 +1692,7 @@ export function RequestsView({
         onDuplicate={handleDuplicateRequest}
         onCopy={handleCopyRequest}
         onPaste={handlePasteRequest}
+        onExportRequest={handleExportRequest}
         onReveal={handleReveal}
         onTogglePin={handleTogglePin}
         onDelete={onDeleteRequest}
@@ -1470,6 +1706,9 @@ export function RequestsView({
         onRename={(workspaceName, collectionName) => setEditingItemId(`col:${collectionName}`)}
         onDuplicate={handleDuplicateCollection}
         onPaste={handlePasteCollectionRoot}
+        onImportCollection={handleImportCollection}
+        onImportRequest={handleImportRequest}
+        onExportCollection={handleExportCollection}
         onReveal={handleReveal}
         onDelete={onDeleteCollection}
         onOpenSettings={onOpenCollectionSettings}
@@ -1512,6 +1751,21 @@ export function RequestsView({
           );
         }}
       />
+      <ImportExportModal
+        open={Boolean(importExportState)}
+        mode={importExportState?.mode}
+        scope={importExportState?.scope}
+        targetName={importExportState?.scope === "request"
+          ? importExportState?.requestName
+          : importExportState?.collectionName}
+        defaultFileName={
+          importExportState?.scope === "request"
+            ? importExportState?.requestName || "request"
+            : importExportState?.collectionName || "collection"
+        }
+        onClose={() => setImportExportState(null)}
+        onConfirm={handleSubmitImportExport}
+      />
       {duplicationTarget && (
         <WorkspaceModal
           title={duplicationTarget.type === 'col' ? "Duplicate Collection" : "Duplicate Request"}
@@ -1549,12 +1803,12 @@ export function Sidebar({
   iconSrc, sidebarTab, collapsed, workspaces, activeWorkspaceName, activeCollectionName, activeRequestName,
   onSidebarTabChange, onSelectWorkspace, onSelectCollection, onSelectRequest,
   onCreateWorkspace, onRenameWorkspace, onDeleteWorkspace,
-  onCreateCollection, onRenameCollection, onDeleteCollection, onDuplicateCollection,
+  onCreateCollection, onRenameCollection, onDeleteCollection, onDuplicateCollection, onImportCollection,
   onCreateFolder,
   onRenameFolder,
   onDeleteFolder,
   onUpdateFolderSettings,
-  onCreateRequest, onRenameRequest, onDeleteRequest, onDuplicateRequest, onPasteRequest, onPasteFolder, onTogglePinRequest,
+  onCreateRequest, onRenameRequest, onDeleteRequest, onDuplicateRequest, onImportRequests, onPasteRequest, onPasteFolder, onTogglePinRequest,
   onOpenCollectionSettings,
   onOpenAppSettings,
 }) {
@@ -1584,6 +1838,7 @@ export function Sidebar({
             onRenameCollection={onRenameCollection}
             onDeleteCollection={onDeleteCollection}
             onDuplicateCollection={onDuplicateCollection}
+            onImportCollection={onImportCollection}
             onCreateFolder={onCreateFolder}
             onRenameFolder={onRenameFolder}
             onDeleteFolder={onDeleteFolder}
@@ -1592,6 +1847,7 @@ export function Sidebar({
             onRenameRequest={onRenameRequest}
             onDeleteRequest={onDeleteRequest}
             onDuplicateRequest={onDuplicateRequest}
+            onImportRequests={onImportRequests}
             onPasteRequest={onPasteRequest}
             onPasteFolder={onPasteFolder}
             onTogglePinRequest={onTogglePinRequest}
