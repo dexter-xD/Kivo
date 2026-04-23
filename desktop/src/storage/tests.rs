@@ -7,7 +7,7 @@ use super::{
     fs_get_env_vars, fs_load_workspaces, fs_save_collection_config, fs_save_env_vars,
     fs_save_workspaces, load_collection_config_from_path, parse_env_file_ordered,
     sanitize_name, write_env_file, AuthRecord, CollectionConfig, CollectionRecord,
-    CollectionScripts, EnvVar, KeyValueRow, OAuthConfig, RequestRecord, ResponseMeta, SavedResponse,
+    CollectionScripts, EnvVar, KeyValueRow, OAuthConfig, RequestRecord, RequestTextOrJson, ResponseMeta, SavedResponse,
     WorkspaceRecord,
 };
 
@@ -20,7 +20,8 @@ fn make_request(name: &str) -> RequestRecord {
         headers: vec![],
         auth: AuthRecord { auth_type: "none".to_string(), token: String::new(), username: String::new(), password: String::new(), api_key_name: String::new(), api_key_value: String::new(), api_key_in: "header".to_string(), oauth2: OAuthConfig::default() },
         body_type: "json".to_string(),
-        body: String::new(),
+        body: RequestTextOrJson::Text(String::new()),
+        graphql_variables: RequestTextOrJson::Text("{}".to_string()),
         docs: String::new(),
         active_editor_tab: "Params".to_string(),
         active_response_tab: "Body".to_string(),
@@ -519,7 +520,7 @@ mod complex_scenario_tests {
         let mut req = make_request_with_response("POST /auth/token");
         req.method = "POST".to_string();
         req.url = "https://api.example.com/auth/token".to_string();
-        req.body = r#"{"username":"admin","password":"secret"}"#.to_string();
+        req.body = RequestTextOrJson::Text(r#"{"username":"admin","password":"secret"}"#.to_string());
         req.body_type = "json".to_string();
         req.query_params = vec![KeyValueRow { key: "v".to_string(), value: "2".to_string(), enabled: true }];
         req.headers = vec![KeyValueRow { key: "Content-Type".to_string(), value: "application/json".to_string(), enabled: true }];
@@ -695,10 +696,13 @@ mod stress_tests {
     fn request_with_100kb_body_roundtrips() {
         let dir = TempDir::new().unwrap();
         let mut req = make_request("POST /upload");
-        req.body = "x".repeat(100_000);
+        req.body = RequestTextOrJson::Text("x".repeat(100_000));
         fs_save_workspaces(dir.path(), &[ws("ws", vec![col("api", vec![req])])]).unwrap();
         let loaded = fs_load_workspaces(dir.path()).unwrap();
-        assert_eq!(loaded[0].collections[0].requests[0].body.len(), 100_000);
+        match &loaded[0].collections[0].requests[0].body {
+            RequestTextOrJson::Text(body) => assert_eq!(body.len(), 100_000),
+            RequestTextOrJson::Json(_) => panic!("expected text body"),
+        }
     }
 
     #[test]

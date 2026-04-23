@@ -126,6 +126,17 @@ export function orderRequests(requests = []) {
 }
 
 export function normalizeRequestRecord(request) {
+  let normalizedBody = "";
+  if (typeof request?.body === "string") {
+    normalizedBody = request.body;
+  } else if (request?.body && typeof request.body === "object") {
+    try {
+      normalizedBody = JSON.stringify(request.body, null, 2);
+    } catch {
+      normalizedBody = "";
+    }
+  }
+
   let normalizedGraphqlVariables = "{\n\n}";
   if (typeof request?.graphqlVariables === "string") {
     normalizedGraphqlVariables = request.graphqlVariables;
@@ -143,6 +154,7 @@ export function normalizeRequestRecord(request) {
     inheritHeaders: request?.inheritHeaders ?? true,
     queryParams: Array.isArray(request?.queryParams) ? request.queryParams : [],
     headers: Array.isArray(request?.headers) ? request.headers : [],
+    body: normalizedBody,
     bodyRows: Array.isArray(request?.bodyRows) ? request.bodyRows : [],
     graphqlVariables: normalizedGraphqlVariables,
     auth: normalizeAuthState(request?.auth)

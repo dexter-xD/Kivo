@@ -230,6 +230,19 @@ pub struct CollectionRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum RequestTextOrJson {
+    Text(String),
+    Json(serde_json::Value),
+}
+
+impl Default for RequestTextOrJson {
+    fn default() -> Self {
+        RequestTextOrJson::Text(String::new())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RequestRecord {
     pub name: String,
@@ -246,9 +259,9 @@ pub struct RequestRecord {
     #[serde(default)]
     pub body_type: String,
     #[serde(default)]
-    pub body: String,
+    pub body: RequestTextOrJson,
     #[serde(default)]
-    pub graphql_variables: String,
+    pub graphql_variables: RequestTextOrJson,
     #[serde(default)]
     pub docs: String,
     #[serde(default)]
