@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
@@ -562,6 +562,52 @@ fn request_to_postman_item(request: &RequestRecord) -> serde_json::Value {
     })
 }
 
+#[derive(Default)]
+struct ExportFolderNode<'a> {
+    requests: Vec<&'a RequestRecord>,
+    children: BTreeMap<String, ExportFolderNode<'a>>,
+}
+
+fn build_export_folder_tree<'a>(requests: &'a [RequestRecord]) -> ExportFolderNode<'a> {
+    fn normalize_folder_segments(path: &str) -> Vec<String> {
+        path
+            .split('/')
+            .map(|segment| segment.trim())
+            .filter(|segment| !segment.is_empty())
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+    }
+
+    let mut root = ExportFolderNode::default();
+    for request in requests {
+        let mut cursor = &mut root;
+        let segments = normalize_folder_segments(&request.folder_path);
+        for segment in segments {
+            cursor = cursor.children.entry(segment).or_default();
+        }
+        cursor.requests.push(request);
+    }
+
+    root
+}
+
+fn postman_items_from_tree(node: &ExportFolderNode) -> Vec<serde_json::Value> {
+    let mut items = vec![];
+
+    for (folder_name, child) in &node.children {
+        items.push(serde_json::json!({
+            "name": folder_name,
+            "item": postman_items_from_tree(child),
+        }));
+    }
+
+    for request in &node.requests {
+        items.push(request_to_postman_item(request));
+    }
+
+    items
+}
+
 fn requests_to_openapi_doc(requests: &[RequestRecord], title: &str, version: &str, openapi_version: &str) -> serde_json::Value {
     let mut paths = serde_json::Map::new();
     for request in requests {
@@ -598,74 +644,106 @@ fn requests_to_openapi_doc(requests: &[RequestRecord], title: &str, version: &st
     }
 }
 
-fn requests_to_bruno_doc(requests: &[RequestRecord], name: &str) -> serde_json::Value {
-    fn request_body_as_text(request: &RequestRecord) -> String {
-        match &request.body {
-            RequestTextOrJson::Text(text) => text.clone(),
-            RequestTextOrJson::Json(json) => serde_json::to_string_pretty(json).unwrap_or_default(),
-        }
+fn request_body_as_text(request: &RequestRecord) -> String {
+    match &request.body {
+        RequestTextOrJson::Text(text) => text.clone(),
+        RequestTextOrJson::Json(json) => serde_json::to_string_pretty(json).unwrap_or_default(),
     }
+}
 
-    fn default_item_settings() -> serde_json::Value {
-        serde_json::json!({
-            "encodeUrl": true,
-            "timeout": 0,
-            "followRedirects": true,
-            "maxRedirects": 5,
-        })
-    }
+fn default_open_collection_item_settings() -> serde_json::Value {
+    serde_json::json!({
+        "encodeUrl": true,
+        "timeout": 0,
+        "followRedirects": true,
+        "maxRedirects": 5,
+    })
+}
 
-    fn request_to_open_collection_item(request: &RequestRecord, seq: usize) -> serde_json::Value {
-        let body_text = request_body_as_text(request);
-        let is_graphql = request.body_type == "graphql";
+fn request_to_open_collection_item(request: &RequestRecord, seq: usize) -> serde_json::Value {
+    let body_text = request_body_as_text(request);
+    let is_graphql = request.body_type == "graphql";
 
-        if is_graphql {
-            return serde_json::json!({
-                "info": {
-                    "name": request.name,
-                    "type": "graphql",
-                    "seq": seq,
-                },
-                "graphql": {
-                    "url": request.url,
-                    "method": if request.method.trim().is_empty() { "POST" } else { request.method.as_str() },
-                    "body": {
-                        "query": body_text,
-                        "variables": "",
-                    },
-                    "auth": "inherit",
-                },
-                "settings": default_item_settings(),
-            });
-        }
-
-        let http_body = if body_text.trim().is_empty() {
-            serde_json::Value::Null
-        } else {
-            serde_json::json!({
-                "type": if request.body_type == "json" { "json" } else { "text" },
-                "data": body_text,
-            })
-        };
-
-        let mut http = serde_json::Map::new();
-        http.insert("method".to_string(), serde_json::Value::String(if request.method.trim().is_empty() { "GET".to_string() } else { request.method.clone() }));
-        http.insert("url".to_string(), serde_json::Value::String(request.url.clone()));
-        http.insert("auth".to_string(), serde_json::Value::String("inherit".to_string()));
-        if !http_body.is_null() {
-            http.insert("body".to_string(), http_body);
-        }
-
-        serde_json::json!({
+    if is_graphql {
+        return serde_json::json!({
             "info": {
                 "name": request.name,
-                "type": "http",
+                "type": "graphql",
                 "seq": seq,
             },
-            "http": serde_json::Value::Object(http),
-            "settings": default_item_settings(),
-        })
+            "graphql": {
+                "url": request.url,
+                "method": if request.method.trim().is_empty() { "POST" } else { request.method.as_str() },
+                "body": {
+                    "query": body_text,
+                    "variables": "",
+                },
+                "auth": "inherit",
+            },
+            "settings": default_open_collection_item_settings(),
+        });
     }
+
+    let http_body = if body_text.trim().is_empty() {
+        serde_json::Value::Null
+    } else {
+        serde_json::json!({
+            "type": if request.body_type == "json" { "json" } else { "text" },
+            "data": body_text,
+        })
+    };
+
+    let mut http = serde_json::Map::new();
+    http.insert("method".to_string(), serde_json::Value::String(if request.method.trim().is_empty() { "GET".to_string() } else { request.method.clone() }));
+    http.insert("url".to_string(), serde_json::Value::String(request.url.clone()));
+    http.insert("auth".to_string(), serde_json::Value::String("inherit".to_string()));
+    if !http_body.is_null() {
+        http.insert("body".to_string(), http_body);
+    }
+
+    serde_json::json!({
+        "info": {
+            "name": request.name,
+            "type": "http",
+            "seq": seq,
+        },
+        "http": serde_json::Value::Object(http),
+        "settings": default_open_collection_item_settings(),
+    })
+}
+
+fn open_collection_items_from_tree(node: &ExportFolderNode, seq: &mut usize) -> Vec<serde_json::Value> {
+    let mut items = vec![];
+
+    for (folder_name, child) in &node.children {
+        let folder_seq = *seq;
+        *seq += 1;
+        items.push(serde_json::json!({
+            "info": {
+                "name": folder_name,
+                "type": "folder",
+                "seq": folder_seq,
+            },
+            "request": {
+                "auth": "inherit",
+            },
+            "items": open_collection_items_from_tree(child, seq),
+        }));
+    }
+
+    for request in &node.requests {
+        let request_seq = *seq;
+        *seq += 1;
+        items.push(request_to_open_collection_item(request, request_seq));
+    }
+
+    items
+}
+
+fn requests_to_bruno_doc(requests: &[RequestRecord], name: &str) -> serde_json::Value {
+    let tree = build_export_folder_tree(requests);
+    let mut seq = 1usize;
+    let items = open_collection_items_from_tree(&tree, &mut seq);
 
     serde_json::json!({
         "opencollection": "1.0.0",
@@ -687,7 +765,7 @@ fn requests_to_bruno_doc(requests: &[RequestRecord], name: &str) -> serde_json::
                 }
             }
         },
-        "items": requests.iter().enumerate().map(|(index, req)| request_to_open_collection_item(req, index + 1)).collect::<Vec<_>>(),
+        "items": items,
         "request": {
             "auth": "inherit"
         },
@@ -726,7 +804,7 @@ fn build_export_value(format: &str, name: &str, requests: &[RequestRecord]) -> R
                 "name": name,
                 "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
             },
-            "item": requests.iter().map(request_to_postman_item).collect::<Vec<_>>()
+            "item": postman_items_from_tree(&build_export_folder_tree(requests))
         })),
         "openapi3.0" => Ok(requests_to_openapi_doc(requests, name, "1.0.0", "3.0.0")),
         "swagger2.0" => Ok(requests_to_openapi_doc(requests, name, "1.0.0", "2.0")),
