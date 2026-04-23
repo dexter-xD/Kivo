@@ -432,6 +432,33 @@ mod save_load_tests {
     }
 
     #[test]
+    fn nested_request_files_created_and_loaded() {
+        let dir = TempDir::new().unwrap();
+        let mut nested = make_request("GET /nested");
+        nested.folder_path = "parent/child".to_string();
+
+        let mut collection = col("users", vec![nested]);
+        collection.folders = vec!["parent".to_string(), "parent/child".to_string()];
+
+        fs_save_workspaces(dir.path(), &[ws("ws", vec![collection])]).unwrap();
+
+        let nested_file = dir
+            .path()
+            .join("ws")
+            .join("collections")
+            .join("users")
+            .join("parent")
+            .join("child")
+            .join("GET _nested.json");
+        assert!(nested_file.exists());
+
+        let loaded = fs_load_workspaces(dir.path()).unwrap();
+        let loaded_requests = &loaded[0].collections[0].requests;
+        assert_eq!(loaded_requests.len(), 1);
+        assert_eq!(loaded_requests[0].folder_path, "parent/child");
+    }
+
+    #[test]
     fn collection_name_with_slash_sanitized_on_disk() {
         let dir = TempDir::new().unwrap();
         fs_save_workspaces(dir.path(), &[ws("ws", vec![col("auth/user", vec![make_request("r")])])]).unwrap();

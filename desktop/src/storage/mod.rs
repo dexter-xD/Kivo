@@ -173,6 +173,105 @@ pub(crate) fn get_collection_dir(root: &Path, workspace_name: &str, collection_n
     root.join(workspace_name).join("collections").join(sanitize_name(collection_name))
 }
 
+fn is_reserved_collection_json(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .map_or(false, |name| {
+            name == COLLECTION_CONFIG_FILE_NAME || name == COLLECTION_STATE_FILE_NAME
+        })
+}
+
+fn collection_subdir_path(collection_path: &Path, folder_path: &str) -> PathBuf {
+    let mut path = collection_path.to_path_buf();
+    for segment in folder_path.split(['/', '\\']) {
+        let trimmed = segment.trim();
+        if trimmed.is_empty() || trimmed == "." || trimmed == ".." {
+            continue;
+        }
+        let safe_segment = sanitize_name(trimmed);
+        if safe_segment.is_empty() {
+            continue;
+        }
+        path.push(safe_segment);
+    }
+    path
+}
+
+fn collect_request_json_files(collection_path: &Path) -> Result<Vec<PathBuf>, String> {
+    let mut files = Vec::new();
+    let mut stack = vec![collection_path.to_path_buf()];
+
+    while let Some(current) = stack.pop() {
+        let entries = fs::read_dir(&current)
+            .map_err(|e| format!("Failed to read collection directory: {e}"))?;
+        for entry in entries {
+            let entry = entry.map_err(|e| format!("Failed to read request entry: {e}"))?;
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+
+            if path.is_file()
+                && path.extension().map_or(false, |ext| ext == "json")
+                && !is_reserved_collection_json(&path)
+            {
+                files.push(path);
+            }
+        }
+    }
+
+    Ok(files)
+}
+
+fn cleanup_empty_collection_dirs(collection_path: &Path) -> Result<(), String> {
+    let mut dirs = Vec::new();
+    let mut stack = vec![collection_path.to_path_buf()];
+
+    while let Some(current) = stack.pop() {
+        let entries = fs::read_dir(&current)
+            .map_err(|e| format!("Failed to read collection directory: {e}"))?;
+        for entry in entries {
+            let entry = entry.map_err(|e| format!("Failed to read directory entry: {e}"))?;
+            let path = entry.path();
+            if path.is_dir() {
+                dirs.push(path.clone());
+                stack.push(path);
+            }
+        }
+    }
+
+    dirs.sort_by_key(|path| std::cmp::Reverse(path.components().count()));
+    for dir in dirs {
+        if fs::read_dir(&dir).map_err(|e| format!("Failed to read directory: {e}"))?.next().is_none() {
+            let _ = fs::remove_dir(&dir);
+        }
+    }
+
+    Ok(())
+}
+
+fn infer_folder_path_from_location(collection_path: &Path, request_path: &Path) -> String {
+    let parent = match request_path.parent() {
+        Some(parent) => parent,
+        None => return String::new(),
+    };
+
+    let relative = match parent.strip_prefix(collection_path) {
+        Ok(relative) => relative,
+        Err(_) => return String::new(),
+    };
+
+    let mut segments = Vec::new();
+    for component in relative.components() {
+        if let Component::Normal(segment) = component {
+            segments.push(segment.to_string_lossy().to_string());
+        }
+    }
+
+    segments.join("/")
+}
+
 pub fn load_env_vars(workspace_path: &Path, collection_path: Option<&Path>) -> HashMap<String, String> {
     let mut vars = parse_env_file(&workspace_path.join(".env"));
     if let Some(col_path) = collection_path {
@@ -548,24 +647,17 @@ pub(crate) fn fs_load_workspaces(root: &Path) -> Result<Vec<WorkspaceRecord>, St
                 continue;
             }
             let mut requests = Vec::new();
-            let req_entries = fs::read_dir(&col_path)
-                .map_err(|e| format!("Failed to read collection directory: {e}"))?;
-            for req_entry in req_entries {
-                let req_entry = req_entry.map_err(|e| format!("Failed to read request entry: {e}"))?;
-                let req_path = req_entry.path();
-                let is_config = req_path.file_name().map_or(false, |n| n == COLLECTION_CONFIG_FILE_NAME);
-                let is_state = req_path.file_name().map_or(false, |n| n == COLLECTION_STATE_FILE_NAME);
-                if req_path.is_file()
-                    && req_path.extension().map_or(false, |e| e == "json")
-                    && !is_config
-                    && !is_state
-                {
-                    let req_json = fs::read_to_string(&req_path)
-                        .map_err(|e| format!("Failed to read request file: {e}"))?;
-                    match serde_json::from_str::<RequestRecord>(&req_json) {
-                        Ok(r) => requests.push(r),
-                        Err(e) => eprintln!("Skipping malformed request file {:?}: {e}", req_path),
+            for req_path in collect_request_json_files(&col_path)? {
+                let req_json = fs::read_to_string(&req_path)
+                    .map_err(|e| format!("Failed to read request file: {e}"))?;
+                match serde_json::from_str::<RequestRecord>(&req_json) {
+                    Ok(mut request) => {
+                        if request.folder_path.trim().is_empty() {
+                            request.folder_path = infer_folder_path_from_location(&col_path, &req_path);
+                        }
+                        requests.push(request);
                     }
+                    Err(e) => eprintln!("Skipping malformed request file {:?}: {e}", req_path),
                 }
             }
             let collection_state = {
@@ -646,22 +738,27 @@ pub(crate) fn fs_save_workspaces(root: &Path, workspaces: &[WorkspaceRecord]) ->
                     .map_err(|e| format!("Failed to create collection directory: {e}"))?;
             }
             ensure_env_and_gitignore(&col_path);
-            for entry in fs::read_dir(&col_path)
-                .map_err(|e| format!("Failed to read collection directory: {e}"))?
-            {
-                let entry = entry.map_err(|e| format!("Failed to read entry: {e}"))?;
-                let ep = entry.path();
-                if ep.is_file() && ep.extension().map_or(false, |e| e == "json") {
-                    let is_config = ep.file_name().map_or(false, |n| n == COLLECTION_CONFIG_FILE_NAME);
-                    let is_state = ep.file_name().map_or(false, |n| n == COLLECTION_STATE_FILE_NAME);
-                    if !is_config && !is_state {
-                        let _ = fs::remove_file(&ep);
-                    }
+            for req_path in collect_request_json_files(&col_path)? {
+                let _ = fs::remove_file(req_path);
+            }
+            cleanup_empty_collection_dirs(&col_path)?;
+
+            for folder_path in &collection.folders {
+                let dir_path = collection_subdir_path(&col_path, folder_path);
+                if !dir_path.exists() {
+                    fs::create_dir_all(&dir_path)
+                        .map_err(|e| format!("Failed to create folder directory: {e}"))?;
                 }
             }
+
             for request in &collection.requests {
                 let safe_req = sanitize_name(&request.name);
-                let req_path = col_path.join(format!("{}.json", safe_req));
+                let req_dir = collection_subdir_path(&col_path, &request.folder_path);
+                if !req_dir.exists() {
+                    fs::create_dir_all(&req_dir)
+                        .map_err(|e| format!("Failed to create request directory: {e}"))?;
+                }
+                let req_path = req_dir.join(format!("{}.json", safe_req));
                 let req_json = serde_json::to_string_pretty(request)
                     .map_err(|e| format!("Failed to serialize request: {e}"))?;
                 fs::write(req_path, req_json)
