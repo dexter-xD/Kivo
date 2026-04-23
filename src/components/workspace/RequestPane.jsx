@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Braces, ChevronDown, Eye, EyeOff, Plus, SendHorizontal, Trash2, Wand2, PenLine, Table2 } from "lucide-react";
+import { open } from "@tauri-apps/plugin-dialog";
 
 import { CodeEditor } from "@/components/workspace/CodeEditor.jsx";
 import { Button } from "@/components/ui/button.jsx";
@@ -497,8 +498,10 @@ export function RequestPane({
   const isJsonBody = state.bodyType === "json";
   const isGraphqlBody = state.bodyType === "graphql";
   const isTableBody = state.bodyType === "form-data" || state.bodyType === "form-urlencoded";
+  const isFileBody = state.bodyType === "file";
 
   const [debouncedState, setDebouncedState] = useState(state);
+  const bodyCacheRef = useRef({});
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedState(state), 500);
@@ -549,6 +552,39 @@ export function RequestPane({
   function handleFormatBody() {
     if (!isJsonBody) return;
     onChange("body", formatJsonText(state.body));
+  }
+
+  function handleBodyTypeChange(bodyType) {
+    const currentType = state.bodyType;
+    const textBodyTypes = ["json", "graphql", "xml", "yaml", "text"];
+
+    if (textBodyTypes.includes(currentType)) {
+      bodyCacheRef.current[currentType] = String(state.body ?? "");
+    }
+
+    onChange("bodyType", bodyType);
+
+    if (textBodyTypes.includes(bodyType)) {
+      const nextBody = typeof bodyCacheRef.current[bodyType] === "string" ? bodyCacheRef.current[bodyType] : "";
+      onChange("body", nextBody);
+    }
+
+    if (bodyType !== "graphql") {
+      onChange("graphqlVariables", "");
+    }
+    if (bodyType !== "file") {
+      onChange("bodyFilePath", "");
+    }
+  }
+
+  async function handleBodyFileBrowse() {
+    try {
+      const selected = await open({ directory: false, multiple: false });
+      if (typeof selected === "string") {
+        onChange("bodyFilePath", selected);
+      }
+    } catch {
+    }
   }
 
   return (
@@ -628,12 +664,12 @@ export function RequestPane({
                 <SelectMenu
                   value={state.bodyType}
                   options={requestBodyModes}
-                  onChange={(bodyType) => onChange("bodyType", bodyType)}
+                  onChange={handleBodyTypeChange}
                   className="min-w-[180px]"
                 />
                 <div className="flex items-center gap-1 border border-border/25 bg-background/20 px-2.5 py-1.5 uppercase tracking-[0.14em]">
                   <Braces className="h-3 w-3" />
-                  <span>{isGraphqlBody ? "GraphQL Request" : isTableBody ? "Form Request" : isJsonBody ? "JSON Highlight" : "Plain Editor"}</span>
+                  <span>{isGraphqlBody ? "GraphQL Request" : isTableBody ? "Form Request" : isFileBody ? "Binary/File Upload" : isJsonBody ? "JSON Highlight" : "Plain Editor"}</span>
                 </div>
               </div>
               {isJsonBody ? (
@@ -666,7 +702,30 @@ export function RequestPane({
               />
             ) : null}
 
-            {!isTableBody && !isGraphqlBody ? (
+            {isFileBody ? (
+              <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-background/10">
+                <div className="flex items-center justify-between border-b border-border/20 px-3 py-2 text-[11px] text-muted-foreground lg:text-[12px]">
+                  <span className="font-medium text-foreground">Request File</span>
+                  <div className="flex items-center gap-2">
+                    <Button type="button" variant="outline" size="sm" className="h-7 px-2.5 text-[11px]" onClick={handleBodyFileBrowse}>
+                      Browse
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" className="h-7 px-2.5 text-[11px]" onClick={() => onChange("bodyFilePath", "")}>
+                      Clear
+                    </Button>
+                  </div>
+                </div>
+                <div className="thin-scrollbar min-h-0 overflow-auto px-4 py-3 text-[12px] text-muted-foreground">
+                  {state.bodyFilePath ? (
+                    <div className="break-all text-foreground">{state.bodyFilePath}</div>
+                  ) : (
+                    <div>Select a file to send as request body.</div>
+                  )}
+                </div>
+              </div>
+            ) : null}
+
+            {!isTableBody && !isGraphqlBody && !isFileBody ? (
               <CodeEditor
                 value={state.body}
                 onChange={(value) => onChange("body", value)}

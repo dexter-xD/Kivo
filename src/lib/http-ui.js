@@ -16,7 +16,8 @@ const bodyContentTypes = {
   graphql: "application/json",
   xml: "application/xml",
   yaml: "application/yaml",
-  text: "text/plain"
+  text: "text/plain",
+  file: "application/octet-stream"
 };
 
 export const codegenLanguageOptions = [
@@ -124,6 +125,13 @@ function serializeBodyByType(request, method, resolveValue = (value) => String(v
         query: resolveValue(request?.body || ""),
         variables
       }),
+      contentType: getDefaultContentType(bodyType)
+    };
+  }
+
+  if (bodyType === "file") {
+    return {
+      body: "",
       contentType: getDefaultContentType(bodyType)
     };
   }
@@ -303,12 +311,15 @@ export function buildResolvedRequestExport(request, context = {}) {
 export function buildRequestPayload(request, workspaceName, collectionName) {
   const { method, url, headers, body, hasBody } = buildRequestExport(request);
   const auth = request?.auth ?? { type: "none" };
+  const bodyType = request?.bodyType ?? "json";
+  const bodyFilePath = bodyType === "file" ? String(request?.bodyFilePath ?? "") : "";
 
   return {
     method,
     url,
     headers,
-    body: hasBody ? body : null,
+    body: bodyType === "file" ? null : (hasBody ? body : null),
+    bodyFilePath: bodyFilePath || null,
     workspaceName: workspaceName || "",
     collectionName: collectionName || "",
     authType: auth.type ?? "none",

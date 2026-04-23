@@ -21,6 +21,8 @@ fn make_request(name: &str) -> RequestRecord {
         auth: AuthRecord { auth_type: "none".to_string(), token: String::new(), username: String::new(), password: String::new(), api_key_name: String::new(), api_key_value: String::new(), api_key_in: "header".to_string(), oauth2: OAuthConfig::default() },
         body_type: "json".to_string(),
         body: RequestTextOrJson::Text(String::new()),
+        body_rows: vec![],
+        body_file_path: String::new(),
         graphql_variables: RequestTextOrJson::Text("{}".to_string()),
         docs: String::new(),
         active_editor_tab: "Params".to_string(),

@@ -4,6 +4,40 @@ export function sendHttpRequest(payload) {
   return invoke("send_http_request", { payload });
 }
 
+function sanitizeRequestForSave(request) {
+  const bodyType = String(request?.bodyType ?? "json");
+
+  const sanitized = {
+    name: String(request?.name ?? ""),
+    pinned: Boolean(request?.pinned),
+    method: String(request?.method ?? "GET"),
+    url: String(request?.url ?? ""),
+    queryParams: Array.isArray(request?.queryParams) ? request.queryParams : [],
+    headers: Array.isArray(request?.headers) ? request.headers : [],
+    auth: sanitizeAuthForSave(request?.auth),
+    bodyType,
+    docs: String(request?.docs ?? ""),
+    activeEditorTab: String(request?.activeEditorTab ?? "Params"),
+    activeResponseTab: String(request?.activeResponseTab ?? "Body"),
+    responseBodyView: String(request?.responseBodyView ?? "JSON"),
+    inheritHeaders: request?.inheritHeaders ?? true,
+    lastResponse: null
+  };
+
+  if (bodyType === "form-data" || bodyType === "form-urlencoded") {
+    sanitized.bodyRows = Array.isArray(request?.bodyRows) ? request.bodyRows : [];
+  } else if (bodyType === "file") {
+    sanitized.bodyFilePath = String(request?.bodyFilePath ?? "");
+  } else if (bodyType === "graphql") {
+    sanitized.body = typeof request?.body === "string" ? request.body : "";
+    sanitized.graphqlVariables = sanitizeGraphqlVariablesForSave(request);
+  } else if (bodyType !== "none") {
+    sanitized.body = sanitizeRequestBodyForSave(request);
+  }
+
+  return sanitized;
+}
+
 export function cancelHttpRequest(requestId) {
   return invoke("cancel_http_request", { requestId });
 }
@@ -65,7 +99,7 @@ function sanitizeGraphqlVariablesForSave(request) {
   const raw = request?.graphqlVariables;
 
   if (request?.bodyType !== "graphql") {
-    return raw;
+    return "";
   }
 
   if (typeof raw !== "string") {
@@ -88,7 +122,11 @@ function sanitizeRequestBodyForSave(request) {
   const raw = request?.body;
   const bodyType = request?.bodyType;
 
-  if (bodyType !== "json" && bodyType !== "graphql") {
+  if (bodyType === "graphql") {
+    return raw;
+  }
+
+  if (bodyType !== "json") {
     return raw;
   }
 
@@ -115,13 +153,7 @@ export function saveAppState(payload) {
       ...workspace,
       collections: workspace.collections?.map((collection) => ({
         ...collection,
-        requests: collection.requests?.map((request) => ({
-          ...request,
-          auth: sanitizeAuthForSave(request?.auth),
-          body: sanitizeRequestBodyForSave(request),
-          graphqlVariables: sanitizeGraphqlVariablesForSave(request),
-          lastResponse: null
-        }))
+        requests: collection.requests?.map((request) => sanitizeRequestForSave(request))
       }))
     }))
   };

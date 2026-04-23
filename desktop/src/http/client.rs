@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fs;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -590,6 +591,10 @@ pub async fn send_http_request(
         .body
         .as_deref()
         .map(|b| resolve_variables(b, &env_vars));
+    let resolved_body_file_path = payload
+        .body_file_path
+        .as_deref()
+        .map(|path| resolve_variables(path, &env_vars));
 
     let mut url = normalize_url(&resolved_url)?;
 
@@ -639,7 +644,12 @@ pub async fn send_http_request(
         .request(method.clone(), &url)
         .headers(build_headers(&merged_headers)?);
 
-    if let Some(body) = resolved_body {
+    if let Some(path) = resolved_body_file_path {
+        if !path.trim().is_empty() {
+            let bytes = fs::read(&path).map_err(|err| format!("Failed to read body file: {err}"))?;
+            request = request.body(bytes);
+        }
+    } else if let Some(body) = resolved_body {
         if !body.trim().is_empty() {
             request = request.body(body);
         }

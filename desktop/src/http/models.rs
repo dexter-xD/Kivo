@@ -82,6 +82,8 @@ pub struct RequestPayload {
     pub method: String,
     pub headers: HashMap<String, String>,
     pub body: Option<String>,
+    #[serde(default)]
+    pub body_file_path: Option<String>,
 
     #[serde(default)]
     pub request_id: String,

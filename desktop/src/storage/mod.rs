@@ -236,6 +236,10 @@ pub enum RequestTextOrJson {
     Json(serde_json::Value),
 }
 
+fn is_empty_request_text_or_json(value: &RequestTextOrJson) -> bool {
+    matches!(value, RequestTextOrJson::Text(text) if text.trim().is_empty())
+}
+
 impl Default for RequestTextOrJson {
     fn default() -> Self {
         RequestTextOrJson::Text(String::new())
@@ -258,9 +262,13 @@ pub struct RequestRecord {
     pub auth: AuthRecord,
     #[serde(default)]
     pub body_type: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_empty_request_text_or_json")]
     pub body: RequestTextOrJson,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub body_rows: Vec<KeyValueRow>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub body_file_path: String,
+    #[serde(default, skip_serializing_if = "is_empty_request_text_or_json")]
     pub graphql_variables: RequestTextOrJson,
     #[serde(default)]
     pub docs: String,

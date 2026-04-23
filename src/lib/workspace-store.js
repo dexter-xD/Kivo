@@ -52,6 +52,7 @@ export function createRequest(name = "New Request") {
     bodyType: "json",
     body: "",
     bodyRows: [],
+    bodyFilePath: "",
     graphqlVariables: "{\n\n}",
     docs: "",
     activeEditorTab: "Params",
@@ -156,6 +157,7 @@ export function normalizeRequestRecord(request) {
     headers: Array.isArray(request?.headers) ? request.headers : [],
     body: normalizedBody,
     bodyRows: Array.isArray(request?.bodyRows) ? request.bodyRows : [],
+    bodyFilePath: typeof request?.bodyFilePath === "string" ? request.bodyFilePath : "",
     graphqlVariables: normalizedGraphqlVariables,
     auth: normalizeAuthState(request?.auth)
   };
