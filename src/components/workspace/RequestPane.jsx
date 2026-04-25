@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Braces, ChevronDown, Eye, EyeOff, FileCode2, FilePlus2, FolderPlus, Plus, RefreshCw, SendHorizontal, Trash2, Wand2, PenLine, Table2, X } from "lucide-react";
+import { Braces, ChevronDown, Eye, EyeOff, FileCode2, FilePlus2, FileText, Folder, FolderPlus, Plus, RefreshCw, SendHorizontal, Trash2, Wand2, PenLine, Table2, X } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 
 import { CodeEditor } from "@/components/workspace/CodeEditor.jsx";
@@ -38,6 +38,24 @@ const authModes = [
 
 function createRow() {
   return { id: `row-${Math.random().toString(36).slice(2, 8)}`, key: "", value: "", enabled: true };
+}
+
+function getPathFileName(path) {
+  const raw = String(path || "").trim();
+  if (!raw) return "";
+  const segments = raw.split(/[\\/]/).filter(Boolean);
+  return segments[segments.length - 1] || raw;
+}
+
+function getPathLeafFolder(path) {
+  const raw = String(path || "").trim();
+  if (!raw) return "";
+  const segments = raw.split(/[\\/]/).filter(Boolean);
+  return segments[segments.length - 1] || raw;
+}
+
+function normalizePath(path) {
+  return String(path || "").trim().replace(/\\/g, "/").toLowerCase();
 }
 
 function RequestSettingsPanel({ state, onChange }) {
@@ -164,15 +182,20 @@ function GrpcHeadersPanel({ headers, onHeadersChange }) {
 function GrpcProtoPickerModal({
   open,
   selectedPath,
-  knownPaths,
+  directFiles,
+  directoryGroups,
   onClose,
   onSave,
   onAddFile,
   onAddDirectory,
-  onRemovePath,
+  onRemoveDirectFile,
+  onRemoveDirectory,
+  onRemoveDirectoryFile,
   loading,
 }) {
   const [draftSelectedPath, setDraftSelectedPath] = useState(selectedPath || "");
+
+  const hasEntries = directFiles.length > 0 || directoryGroups.length > 0;
 
   useEffect(() => {
     if (!open) return;
@@ -186,9 +209,12 @@ function GrpcProtoPickerModal({
       className="fixed inset-0 z-[260] flex items-center justify-center bg-background/70 p-6 backdrop-blur-sm"
       onMouseDown={(event) => event.target === event.currentTarget && onClose()}
     >
-      <Card className="grid h-[min(620px,92vh)] w-[min(940px,96vw)] grid-rows-[auto_auto_minmax(0,1fr)_auto] border border-border/50 bg-card/95 p-5 shadow-2xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-[28px] font-semibold text-foreground">Select Proto File</h2>
+      <Card className="grid h-[min(680px,94vh)] w-[min(980px,96vw)] grid-rows-[auto_auto_minmax(0,1fr)_auto] border border-border/60 bg-card/95 p-6 shadow-2xl">
+        <div className="mb-5 flex items-center justify-between">
+          <div>
+            <h2 className="text-[34px] font-semibold text-foreground">Select Proto File</h2>
+            <p className="mt-1 text-[12px] text-muted-foreground">Add files directly or scan a directory, then choose one file to use.</p>
+          </div>
           <button
             type="button"
             onClick={onClose}
@@ -212,30 +238,51 @@ function GrpcProtoPickerModal({
           </div>
         </div>
 
-        <div className="thin-scrollbar min-h-0 overflow-auto border border-border/30 bg-background/10">
-          {knownPaths.length === 0 ? (
-            <div className="px-4 py-6 text-[12px] text-muted-foreground">No proto files added yet.</div>
+        <div className="thin-scrollbar min-h-0 overflow-auto border border-border/30 bg-background/15">
+          {!hasEntries ? (
+            <div className="px-4 py-8 text-[12px] text-muted-foreground">No proto files added yet.</div>
           ) : (
-            <div className="divide-y divide-border/20">
-              {knownPaths.map((path) => (
-                <div key={path} className="grid grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2">
-                  <input
-                    type="radio"
-                    name="grpc-proto-path"
-                    checked={draftSelectedPath === path}
-                    onChange={() => setDraftSelectedPath(path)}
-                    className="h-3.5 w-3.5 accent-primary"
-                  />
-                  <div className="truncate text-[12px] text-foreground">{path}</div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => onRemovePath(path)}
-                    className="h-7 w-7"
-                  >
+            <div className="divide-y divide-border/20 px-2 py-1">
+              {directFiles.map((path) => (
+                <div key={`file-${path}`} className="grid grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-2 px-2 py-2">
+                  <input type="radio" name="grpc-proto-path" checked={draftSelectedPath === path} onChange={() => setDraftSelectedPath(path)} className="h-3.5 w-3.5 accent-primary" />
+                  <div className="flex min-w-0 items-center gap-2 text-[12px] text-foreground">
+                    <FileText className="h-3.5 w-3.5 shrink-0 text-cyan-300" />
+                    <span className="truncate">{getPathFileName(path)}</span>
+                  </div>
+                  <Button type="button" variant="ghost" size="icon" onClick={() => onRemoveDirectFile(path)} className="h-7 w-7">
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
+                </div>
+              ))}
+
+              {directoryGroups.map((group) => (
+                <div key={`dir-${group.path}`} className="px-2 py-2">
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+                    <div className="flex items-center gap-2 text-[12px] font-medium text-foreground">
+                      <Folder className="h-3.5 w-3.5 text-amber-300" />
+                      <span className="truncate">{getPathLeafFolder(group.path) || group.path}</span>
+                    </div>
+                    <Button type="button" variant="ghost" size="icon" onClick={() => onRemoveDirectory(group.path)} className="h-7 w-7">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+
+                  <div className="mt-1 space-y-1 pl-5">
+                    {(group.files || []).map((path) => (
+                      <div key={`dir-file-${group.path}-${path}`} className="grid grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-2">
+                        <input type="radio" name="grpc-proto-path" checked={draftSelectedPath === path} onChange={() => setDraftSelectedPath(path)} className="h-3.5 w-3.5 accent-primary" />
+                        <div className="flex min-w-0 items-center gap-2 text-[12px] text-foreground">
+                          <span className="text-muted-foreground">|_</span>
+                          <FileText className="h-3.5 w-3.5 shrink-0 text-cyan-300" />
+                          <span className="truncate">{getPathFileName(path)}</span>
+                        </div>
+                        <Button type="button" variant="ghost" size="icon" onClick={() => onRemoveDirectoryFile(group.path, path)} className="h-7 w-7">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
@@ -247,11 +294,46 @@ function GrpcProtoPickerModal({
           <Button
             type="button"
             onClick={() => onSave(draftSelectedPath)}
-            disabled={!draftSelectedPath || loading}
+            disabled={!draftSelectedPath || loading || !hasEntries}
             className="h-9 px-6"
           >
             Save
           </Button>
+        </div>
+      </Card>
+    </div>,
+    document.body
+  );
+}
+
+function SendErrorModal({ open, title, stackTrace, onClose }) {
+  if (!open) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[280] flex items-center justify-center bg-background/75 p-6 backdrop-blur-sm" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <Card className="grid h-[min(620px,90vh)] w-[min(980px,96vw)] grid-rows-[auto_auto_minmax(0,1fr)_auto] gap-3 border border-border/60 bg-card/95 p-5 shadow-2xl">
+        <div className="flex items-center justify-between">
+          <div className="text-[36px] font-semibold text-foreground">Uh Oh!</div>
+          <button type="button" onClick={onClose} className="text-muted-foreground transition-colors hover:text-foreground">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="border border-red-500/40 bg-red-500/[0.08] px-3 py-2 text-[12px] text-red-300">
+          {title || "Request failed"}
+        </div>
+
+        <div className="min-h-0 overflow-hidden">
+          <details open className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)]">
+            <summary className="cursor-pointer text-[12px] text-foreground">Stack trace</summary>
+            <div className="mt-2 min-h-0 overflow-auto border border-border/35 bg-background/30 p-2.5 text-[12px] text-foreground">
+              <pre className="whitespace-pre-wrap break-words font-mono">{stackTrace || title || "No stack trace available."}</pre>
+            </div>
+          </details>
+        </div>
+
+        <div className="flex justify-end">
+          <Button type="button" onClick={onClose} className="h-9 px-8">Ok</Button>
         </div>
       </Card>
     </div>,
@@ -777,9 +859,14 @@ export function RequestPane({
   const [isGrpcMethodsLoading, setIsGrpcMethodsLoading] = useState(false);
   const [grpcMethodError, setGrpcMethodError] = useState("");
   const [isGrpcProtoPickerOpen, setIsGrpcProtoPickerOpen] = useState(false);
-  const [grpcKnownProtoPaths, setGrpcKnownProtoPaths] = useState([]);
+  const [grpcDirectProtoFiles, setGrpcDirectProtoFiles] = useState([]);
+  const [grpcProtoDirectories, setGrpcProtoDirectories] = useState([]);
   const [showReflectionTooltip, setShowReflectionTooltip] = useState(false);
   const [grpcBodyNotice, setGrpcBodyNotice] = useState("");
+  const [showSendErrorModal, setShowSendErrorModal] = useState(false);
+  const [sendErrorTitle, setSendErrorTitle] = useState("");
+  const [sendErrorTrace, setSendErrorTrace] = useState("");
+  const seenErrorKeyRef = useRef("");
   const activeWsState = wsState ?? {
     connected: false,
     connecting: false,
@@ -822,6 +909,11 @@ export function RequestPane({
     () => grpcMethods.map((method) => ({ value: method.value, label: method.label })),
     [grpcMethods]
   );
+  const grpcAllKnownProtoPaths = useMemo(() => {
+    const fromDirectories = grpcProtoDirectories.flatMap((group) => group.files || []);
+    return Array.from(new Set([...grpcDirectProtoFiles, ...fromDirectories]));
+  }, [grpcDirectProtoFiles, grpcProtoDirectories]);
+  const grpcSelectedProtoFileName = getPathFileName(state.grpcProtoFilePath);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedState(state), 500);
@@ -884,18 +976,35 @@ export function RequestPane({
 
   useEffect(() => {
     if (!isGrpcRequest) return;
-    if (!Array.isArray(grpcKnownProtoPaths) || grpcKnownProtoPaths.length === 0) return;
+    if (!Array.isArray(grpcAllKnownProtoPaths) || grpcAllKnownProtoPaths.length === 0) return;
     const current = String(state.grpcProtoFilePath || "").trim();
     if (current) return;
-    onChange("grpcProtoFilePath", grpcKnownProtoPaths[0]);
-  }, [grpcKnownProtoPaths, isGrpcRequest, onChange, state.grpcProtoFilePath]);
+    onChange("grpcProtoFilePath", grpcAllKnownProtoPaths[0]);
+  }, [grpcAllKnownProtoPaths, isGrpcRequest, onChange, state.grpcProtoFilePath]);
 
   useEffect(() => {
     if (!isGrpcRequest) return;
     const current = String(state.grpcProtoFilePath || "").trim();
     if (!current) return;
-    setGrpcKnownProtoPaths((paths) => (paths.includes(current) ? paths : [...paths, current]));
-  }, [isGrpcRequest, state.grpcProtoFilePath]);
+    const hasCurrent = grpcAllKnownProtoPaths.some((path) => normalizePath(path) === normalizePath(current));
+    if (hasCurrent) return;
+    setGrpcDirectProtoFiles((paths) => (paths.some((path) => normalizePath(path) === normalizePath(current)) ? paths : [...paths, current]));
+  }, [grpcAllKnownProtoPaths, isGrpcRequest, state.grpcProtoFilePath]);
+
+  useEffect(() => {
+    const status = Number(response?.status || 0);
+    const savedAt = String(response?.savedAt || "");
+    const bodyText = String(response?.rawBody || response?.body || "").trim();
+    const isError = status >= 400;
+    if (!isError || !savedAt) return;
+    const key = `${savedAt}-${status}-${bodyText.slice(0, 80)}`;
+    if (seenErrorKeyRef.current === key) return;
+    seenErrorKeyRef.current = key;
+    const firstLine = bodyText.split(/\r?\n/)[0] || response?.statusText || "Request failed";
+    setSendErrorTitle(firstLine);
+    setSendErrorTrace(bodyText || firstLine);
+    setShowSendErrorModal(true);
+  }, [response?.status, response?.savedAt, response?.rawBody, response?.body, response?.statusText]);
 
   useEffect(() => {
     if (!isGrpcRequest) return;
@@ -999,7 +1108,10 @@ export function RequestPane({
         filters: [{ name: "Protocol Buffers", extensions: ["proto"] }]
       });
       if (typeof selected !== "string") return;
-      setGrpcKnownProtoPaths((current) => Array.from(new Set([...current, selected])));
+      setGrpcDirectProtoFiles((current) => {
+        if (current.some((path) => normalizePath(path) === normalizePath(selected))) return current;
+        return [...current, selected];
+      });
     } catch {
     }
   }
@@ -1009,9 +1121,12 @@ export function RequestPane({
       const selected = await open({ directory: true, multiple: false });
       if (typeof selected !== "string") return;
       const files = await listGrpcProtoFilesInDirectory(selected);
-      if (Array.isArray(files) && files.length > 0) {
-        setGrpcKnownProtoPaths((current) => Array.from(new Set([...current, ...files])));
-      }
+      setGrpcProtoDirectories((current) => {
+        const nextFiles = Array.isArray(files) ? files : [];
+        const filtered = nextFiles.filter((path) => String(path || "").trim());
+        const without = current.filter((group) => normalizePath(group.path) !== normalizePath(selected));
+        return [...without, { path: selected, files: filtered }];
+      });
     } catch {
     }
   }
@@ -1023,9 +1138,30 @@ export function RequestPane({
     setIsGrpcProtoPickerOpen(false);
   }
 
-  function handleGrpcProtoRemove(path) {
-    setGrpcKnownProtoPaths((current) => current.filter((entry) => entry !== path));
+  function handleGrpcDirectFileRemove(path) {
+    setGrpcDirectProtoFiles((current) => current.filter((entry) => normalizePath(entry) !== normalizePath(path)));
     if (state.grpcProtoFilePath === path) {
+      onChange("grpcProtoFilePath", "");
+      onChange("grpcMethodPath", "");
+    }
+  }
+
+  function handleGrpcDirectoryRemove(dirPath) {
+    const removedGroup = grpcProtoDirectories.find((group) => normalizePath(group.path) === normalizePath(dirPath));
+    setGrpcProtoDirectories((current) => current.filter((group) => normalizePath(group.path) !== normalizePath(dirPath)));
+    if (!removedGroup) return;
+    if ((removedGroup.files || []).some((path) => normalizePath(path) === normalizePath(state.grpcProtoFilePath))) {
+      onChange("grpcProtoFilePath", "");
+      onChange("grpcMethodPath", "");
+    }
+  }
+
+  function handleGrpcDirectoryFileRemove(dirPath, filePath) {
+    setGrpcProtoDirectories((current) => current.map((group) => {
+      if (normalizePath(group.path) !== normalizePath(dirPath)) return group;
+      return { ...group, files: (group.files || []).filter((path) => normalizePath(path) !== normalizePath(filePath)) };
+    }).filter((group) => (group.files || []).length > 0));
+    if (normalizePath(state.grpcProtoFilePath) === normalizePath(filePath)) {
       onChange("grpcProtoFilePath", "");
       onChange("grpcMethodPath", "");
     }
@@ -1103,18 +1239,23 @@ export function RequestPane({
         ) : null}
 
         {isGrpcRequest ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 rounded-none text-muted-foreground lg:h-10"
-            disabled={!hasValidGrpcUrl}
-            onMouseEnter={() => setShowReflectionTooltip(true)}
-            onMouseLeave={() => setShowReflectionTooltip(false)}
-            onClick={handleGrpcReflectionRefresh}
-          >
-            <RefreshCw className="h-4 w-4" />
-          </Button>
+          <div className="relative h-8 lg:h-10" onMouseEnter={() => setShowReflectionTooltip(true)} onMouseLeave={() => setShowReflectionTooltip(false)}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 rounded-none text-muted-foreground lg:h-10"
+              disabled={!hasValidGrpcUrl}
+              onClick={handleGrpcReflectionRefresh}
+            >
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+            {showReflectionTooltip && hasValidGrpcUrl ? (
+              <div className="pointer-events-none absolute left-1/2 top-[calc(100%+6px)] z-30 -translate-x-1/2 whitespace-nowrap border border-border/40 bg-popover px-2 py-1 text-[11px] text-foreground shadow-lg">
+                Click to use server reflection
+              </div>
+            ) : null}
+          </div>
         ) : null}
 
         {isGrpcRequest ? (
@@ -1140,15 +1281,12 @@ export function RequestPane({
         </Button>
       </div>
 
-      {isGrpcRequest && showReflectionTooltip && hasValidGrpcUrl ? (
-        <div className="border-b border-border/20 bg-popover px-3 py-1.5 text-[11px] text-foreground">
-          Click to use server reflection
-        </div>
-      ) : null}
-
       {isGrpcRequest ? (
         <div className="flex items-center justify-between border-b border-border/20 bg-background/10 px-3 py-2 text-[11px] text-muted-foreground">
-          <div className="truncate">{state.grpcProtoFilePath || "No .proto file selected"}</div>
+          <div className="flex min-w-0 items-center gap-2 truncate">
+            <FileText className="h-3.5 w-3.5 shrink-0 text-cyan-300" />
+            <span className="truncate">{grpcSelectedProtoFileName || "No .proto file selected"}</span>
+          </div>
           <Button type="button" variant="outline" size="sm" className="h-7 gap-1.5 px-2.5 text-[11px]" onClick={handleGrpcProtoBrowse}>
             <FileCode2 className="h-3.5 w-3.5" /> Proto
           </Button>
@@ -1362,13 +1500,23 @@ export function RequestPane({
       <GrpcProtoPickerModal
         open={isGrpcProtoPickerOpen}
         selectedPath={state.grpcProtoFilePath}
-        knownPaths={grpcKnownProtoPaths}
+        directFiles={grpcDirectProtoFiles}
+        directoryGroups={grpcProtoDirectories}
         onClose={() => setIsGrpcProtoPickerOpen(false)}
         onSave={handleGrpcProtoPickerSave}
         onAddFile={handleGrpcAddProtoFile}
         onAddDirectory={handleGrpcAddDirectory}
-        onRemovePath={handleGrpcProtoRemove}
+        onRemoveDirectFile={handleGrpcDirectFileRemove}
+        onRemoveDirectory={handleGrpcDirectoryRemove}
+        onRemoveDirectoryFile={handleGrpcDirectoryFileRemove}
         loading={isGrpcMethodsLoading}
+      />
+
+      <SendErrorModal
+        open={showSendErrorModal}
+        title={sendErrorTitle}
+        stackTrace={sendErrorTrace}
+        onClose={() => setShowSendErrorModal(false)}
       />
     </Card>
   );
