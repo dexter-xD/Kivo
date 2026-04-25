@@ -14,7 +14,7 @@ import { exportCollectionFile, exportRequestFile, getCollectionConfig, getEnvVar
 import { buildCurlCommand, codegenLanguageOptions, generateCodeSnippet, getMethodTone } from "@/lib/http-ui.js";
 import { createDefaultAuthState, normalizeAuthState } from "@/lib/oauth.js";
 import { cn } from "@/lib/utils.js";
-import { getUniqueName, REQUEST_MODE_OPTIONS } from "@/lib/workspace-store.js";
+import { getUniqueName, REQUEST_MODE_OPTIONS, REQUEST_MODES } from "@/lib/workspace-store.js";
 import { WorkspaceModal } from "./WorkspaceModal.jsx";
 
 const AUTH_MODES = [
@@ -219,6 +219,24 @@ function getRequestRecord(workspaces, workspaceName, collectionName, requestName
     .find((w) => w.name === workspaceName)
     ?.collections?.find((c) => c.name === collectionName)
     ?.requests?.find((r) => r.name === requestName) ?? null;
+}
+
+function getRequestBaseNameByMode(mode) {
+  switch (mode) {
+    case REQUEST_MODES.SSE:
+      return "SSE Request";
+    case REQUEST_MODES.GRAPHQL:
+      return "GraphQL Request";
+    case REQUEST_MODES.GRPC:
+      return "gRPC Request";
+    case REQUEST_MODES.WEBSOCKET:
+      return "WebSocket Request";
+    case REQUEST_MODES.SOCKET_IO:
+      return "Socket.IO Request";
+    case REQUEST_MODES.HTTP:
+    default:
+      return "HTTP Request";
+  }
 }
 
 function FolderContextMenu({ menu, onCreateRequest, onCreateFolder, onOpenSettings, onCopyFolder, onPasteIntoFolder, onRevealFolder, onRename, onDelete, onClose, canPaste }) {
@@ -1239,8 +1257,20 @@ export function RequestsView({
 
   function handleCreateRequestByMode(mode, menu) {
     if (!menu) return;
-    setExpandedCollectionNames((names) => Array.from(new Set([...names, menu.collectionName])));
-    onCreateRequest(menu.workspaceName, menu.collectionName, undefined, menu.folderPath, mode);
+    handleCreateRequestAndRename(menu.workspaceName, menu.collectionName, menu.folderPath, mode);
+  }
+
+  function handleCreateRequestAndRename(workspaceName, collectionName, folderPath = "", mode = REQUEST_MODES.HTTP) {
+    const collection = workspaces
+      .find((workspace) => workspace.name === workspaceName)
+      ?.collections?.find((item) => item.name === collectionName);
+    const existingNames = collection?.requests?.map((request) => request.name) ?? [];
+    const baseName = getRequestBaseNameByMode(mode);
+    const nextName = getUniqueName(baseName, existingNames);
+
+    setExpandedCollectionNames((names) => Array.from(new Set([...names, collectionName])));
+    onCreateRequest(workspaceName, collectionName, nextName, folderPath, mode);
+    setEditingItemId(`req:${collectionName}:${nextName}`);
   }
 
   function openFolderContextMenu(event, workspaceName, collectionName, folderPath) {
@@ -1706,6 +1736,7 @@ export function RequestsView({
                                             existingNames={col.requests.map((request) => request.name)}
                                             onSubmit={(name) => {
                                               onCreateRequest(effectiveWorkspaceName, col.name, name, folderPath);
+                                              setEditingItemId(`req:${col.name}:${name}`);
                                               setCreatingRequestInFolder(null);
                                             }}
                                             onCancel={() => setCreatingRequestInFolder(null)}
@@ -1762,6 +1793,7 @@ export function RequestsView({
                           existingNames={col.requests.map(r => r.name)}
                           onSubmit={(name) => {
                             onCreateRequest(effectiveWorkspaceName, col.name, name);
+                            setEditingItemId(`req:${col.name}:${name}`);
                             setCreatingRequestInCollection(null);
                           }}
                           onCancel={() => setCreatingRequestInCollection(null)}
@@ -1808,7 +1840,7 @@ export function RequestsView({
       />
       <CollectionContextMenu
         menu={collectionContextMenu}
-        onCreateRequest={onCreateRequest}
+        onCreateRequest={(workspaceName, collectionName) => handleCreateRequestAndRename(workspaceName, collectionName)}
         onCreateFolder={handleStartCreateFolder}
         onRename={(workspaceName, collectionName) => setEditingItemId(`col:${collectionName}`)}
         onDuplicate={handleDuplicateCollection}
