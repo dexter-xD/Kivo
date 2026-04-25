@@ -587,6 +587,10 @@ export function RequestPane({
   const isGraphqlBody = state.bodyType === "graphql";
   const isTableBody = state.bodyType === "form-data" || state.bodyType === "form-urlencoded";
   const isFileBody = state.bodyType === "file";
+  const isPlainBodySurface = state.bodyType === "none"
+    || state.bodyType === "xml"
+    || state.bodyType === "yaml"
+    || state.bodyType === "text";
 
   const [debouncedState, setDebouncedState] = useState(state);
   const bodyCacheRef = useRef({});
@@ -746,7 +750,7 @@ export function RequestPane({
         ) : null}
 
         {activeTab === "Body" ? (
-          <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
+          <div className={cn("grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]", isPlainBodySurface && "bg-background/10")}>
             <div className="flex items-center justify-between gap-3 border-b border-border/20 px-3 py-2 text-[11px] text-muted-foreground">
               <div className="flex items-center gap-2">
                 <SelectMenu
@@ -826,14 +830,16 @@ export function RequestPane({
         ) : null}
 
         {activeTab === "Auth" ? (
-          <AuthPanel
-            state={state}
-            onAuthChange={onAuthChange}
-            envVars={envVars}
-            response={response}
-            workspaceName={workspaceName}
-            collectionName={collectionName}
-          />
+          <div className="h-full bg-background/10">
+            <AuthPanel
+              state={state}
+              onAuthChange={onAuthChange}
+              envVars={envVars}
+              response={response}
+              workspaceName={workspaceName}
+              collectionName={collectionName}
+            />
+          </div>
         ) : null}
 
         {activeTab === "Docs" ? (
