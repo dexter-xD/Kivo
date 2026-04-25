@@ -17,8 +17,12 @@ export function RequestTabs({
     <div className="flex items-stretch overflow-x-auto border-b border-border/30 bg-card/28 px-1 thin-scrollbar lg:h-[44px]">
       {requestTabs.map((request) => (
         (() => {
-          const displayMethod = request.requestMode === REQUEST_MODES.WEBSOCKET ? "WS" : request.method;
-          const methodTone = request.requestMode === REQUEST_MODES.WEBSOCKET ? "text-amber-300 bg-amber-500/15" : getMethodTone(request.method);
+          const isWebSocket = request.requestMode === REQUEST_MODES.WEBSOCKET;
+          const isGrpc = request.requestMode === REQUEST_MODES.GRPC;
+          const displayMethod = isWebSocket ? "WS" : (isGrpc ? "gRPC" : request.method);
+          const methodTone = isWebSocket
+            ? "text-amber-300 bg-amber-500/15"
+            : (isGrpc ? "text-cyan-300 bg-cyan-500/15" : getMethodTone(request.method));
           return (
             <button
               key={request.name}

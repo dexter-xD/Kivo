@@ -181,6 +181,12 @@ pub struct RequestRecord {
     pub body_file_path: String,
     #[serde(default, skip_serializing_if = "is_empty_request_text_or_json")]
     pub graphql_variables: RequestTextOrJson,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub grpc_proto_file_path: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub grpc_method_path: String,
+    #[serde(default = "default_grpc_streaming_mode")]
+    pub grpc_streaming_mode: String,
     #[serde(default)]
     pub docs: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -411,6 +417,10 @@ pub fn default_max_redirects() -> u32 {
 
 pub fn default_request_mode() -> String {
     "http".to_string()
+}
+
+pub fn default_grpc_streaming_mode() -> String {
+    "bidi".to_string()
 }
 
 pub fn default_auth_record() -> AuthRecord {

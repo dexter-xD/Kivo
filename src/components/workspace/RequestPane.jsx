@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Braces, ChevronDown, Eye, EyeOff, Plus, SendHorizontal, Trash2, Wand2, PenLine, Table2 } from "lucide-react";
+import { Braces, ChevronDown, Eye, EyeOff, FileCode2, Plus, SendHorizontal, Trash2, Wand2, PenLine, Table2 } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 
 import { CodeEditor } from "@/components/workspace/CodeEditor.jsx";
@@ -18,6 +18,18 @@ const requestMethods = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTION
 const webSocketBodyModes = [
   { value: "json", label: "JSON" },
   { value: "text", label: "Raw" }
+];
+const grpcStreamingModes = [
+  { value: "unary", label: "Unary" },
+  { value: "server_stream", label: "Server Streaming" },
+  { value: "client_stream", label: "Client Streaming" },
+  { value: "bidi", label: "Bi-directional Streaming" }
+];
+const grpcDefaultMethodOptions = [
+  { value: "/BookService/GetBook", label: "U /BookService/GetBook" },
+  { value: "/BookService/GetBooksViaAuthor", label: "SS /BookService/GetBooksViaAuthor" },
+  { value: "/BookService/GetGreatestBook", label: "CS /BookService/GetGreatestBook" },
+  { value: "/BookService/GetBooks", label: "BD /BookService/GetBooks" }
 ];
 const authModes = [
   { value: "none", label: "No Auth" },
@@ -118,6 +130,49 @@ function RequestSettingsPanel({ state, onChange }) {
       </div>
     </div>
   );
+}
+
+function GrpcHeadersPanel({ headers, onHeadersChange }) {
+  const systemHeaders = [
+    { key: "content-type", value: "application/grpc" },
+    { key: "te", value: "trailers" }
+  ];
+
+  return (
+    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
+      <div className="border-b border-border/20 px-3 py-2 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+        gRPC Transport Headers
+      </div>
+      <div className="thin-scrollbar min-h-0 overflow-auto bg-background/10">
+        {systemHeaders.map((row) => (
+          <div key={row.key} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] border-b border-border/10 px-3 py-2 text-[12px]">
+            <div className="text-foreground">{row.key}</div>
+            <div className="text-muted-foreground">{row.value}</div>
+          </div>
+        ))}
+        <div className="border-t border-border/20">
+          <TableEditor
+            rows={headers}
+            onChange={onHeadersChange}
+            keyLabel="header"
+            valueLabel="value"
+            title="Custom Metadata"
+            addLabel="Add"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function buildGrpcMethodOptions(currentPath) {
+  if (!currentPath || grpcDefaultMethodOptions.some((option) => option.value === currentPath)) {
+    return grpcDefaultMethodOptions;
+  }
+  return [
+    { value: currentPath, label: `U ${currentPath}` },
+    ...grpcDefaultMethodOptions
+  ];
 }
 
 function WebSocketHeadersPanel({ headers, onHeadersChange }) {
@@ -627,6 +682,7 @@ export function RequestPane({
   collectionName,
 }) {
   const isWebSocketRequest = state.requestMode === REQUEST_MODES.WEBSOCKET;
+  const isGrpcRequest = state.requestMode === REQUEST_MODES.GRPC;
   const activeWsState = wsState ?? {
     connected: false,
     connecting: false,
@@ -635,9 +691,13 @@ export function RequestPane({
     lastEventAt: "",
     error: ""
   };
-  const visibleTabs = isWebSocketRequest ? ["Params", "Body", "Auth", "Headers", "Docs"] : tabs;
+  const visibleTabs = isWebSocketRequest
+    ? ["Params", "Body", "Auth", "Headers", "Docs"]
+    : isGrpcRequest
+      ? ["Body", "Headers", "Docs"]
+      : tabs;
   const activeTab = state.activeEditorTab ?? "Params";
-  const bodyDisabled = !isWebSocketRequest && (state.method === "GET" || state.method === "DELETE" || state.bodyType === "none");
+  const bodyDisabled = !isWebSocketRequest && !isGrpcRequest && (state.method === "GET" || state.method === "DELETE" || state.bodyType === "none");
   const isJsonBody = state.bodyType === "json";
   const isGraphqlBody = state.bodyType === "graphql";
   const isTableBody = state.bodyType === "form-data" || state.bodyType === "form-urlencoded";
@@ -649,6 +709,7 @@ export function RequestPane({
 
   const [debouncedState, setDebouncedState] = useState(state);
   const bodyCacheRef = useRef({});
+  const grpcMethodOptions = useMemo(() => buildGrpcMethodOptions(state.grpcMethodPath), [state.grpcMethodPath]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedState(state), 500);
@@ -664,6 +725,19 @@ export function RequestPane({
       onChange("bodyType", "json");
     }
   }, [activeTab, isWebSocketRequest, onChange, onTabChange, state.bodyType, visibleTabs]);
+
+  useEffect(() => {
+    if (!isGrpcRequest) return;
+    if (!visibleTabs.includes(activeTab)) {
+      onTabChange("Body");
+    }
+    if (state.bodyType !== "json") {
+      onChange("bodyType", "json");
+    }
+    if (!state.grpcMethodPath) {
+      onChange("grpcMethodPath", grpcDefaultMethodOptions[0].value);
+    }
+  }, [activeTab, isGrpcRequest, onChange, onTabChange, state.bodyType, state.grpcMethodPath, visibleTabs]);
 
   const missingVars = useMemo(() => {
     if (!envVars) return [];
@@ -744,12 +818,35 @@ export function RequestPane({
     }
   }
 
+  async function handleGrpcProtoBrowse() {
+    try {
+      const selected = await open({
+        directory: false,
+        multiple: false,
+        filters: [{ name: "Protocol Buffers", extensions: ["proto"] }]
+      });
+      if (typeof selected === "string") {
+        onChange("grpcProtoFilePath", selected);
+      }
+    } catch {
+    }
+  }
+
   return (
     <Card className="flex h-full min-h-0 flex-col gap-0 overflow-hidden border-0 border-r border-border/30 bg-card/84 p-0 shadow-none">
-      <div className="grid grid-cols-[108px_minmax(0,1fr)_92px] gap-px border-b border-border/25 bg-border/20 lg:grid-cols-[124px_minmax(0,1fr)_108px]">
+      <div className={cn(
+        "grid gap-px border-b border-border/25 bg-border/20",
+        isGrpcRequest
+          ? "grid-cols-[88px_minmax(0,1fr)_220px_92px] lg:grid-cols-[100px_minmax(0,1fr)_280px_108px]"
+          : "grid-cols-[108px_minmax(0,1fr)_92px] lg:grid-cols-[124px_minmax(0,1fr)_108px]"
+      )}>
         {isWebSocketRequest ? (
           <div className="flex h-8 items-center px-3 lg:h-10">
             <span className="font-semibold uppercase tracking-[0.14em] text-amber-300">WS</span>
+          </div>
+        ) : isGrpcRequest ? (
+          <div className="flex h-8 items-center px-3 lg:h-10">
+            <span className="font-semibold uppercase tracking-[0.14em] text-cyan-300">gRPC</span>
           </div>
         ) : (
           <MethodPicker value={state.method} onChange={(method) => onChange("method", method)} />
@@ -759,9 +856,18 @@ export function RequestPane({
           inputClassName="h-8 rounded-none border-0 bg-input/60 text-[12.5px] lg:h-10 lg:text-[14px]"
           value={state.url}
           onValueChange={(val) => onChange("url", val)}
-          placeholder={isWebSocketRequest ? "wss://example.com/chat" : "https://api.example.com/v1/users"}
+          placeholder={isWebSocketRequest ? "wss://example.com/chat" : isGrpcRequest ? "grpcb.in:9000" : "https://api.example.com/v1/users"}
           envVars={envVars}
         />
+
+        {isGrpcRequest ? (
+          <SelectMenu
+            value={state.grpcMethodPath || grpcMethodOptions[0]?.value || ""}
+            options={grpcMethodOptions}
+            onChange={(methodPath) => onChange("grpcMethodPath", methodPath)}
+            buttonClassName="h-8 rounded-none border-0 bg-input/60 text-[12px] lg:h-10 lg:text-[13px]"
+          />
+        ) : null}
 
         <Button
           className="h-8 gap-1.5 rounded-none px-2.5 text-[12px] lg:h-10 lg:text-[14px]"
@@ -769,10 +875,19 @@ export function RequestPane({
           type="button"
           disabled={isWebSocketRequest ? false : isSending}
         >
-          {isWebSocketRequest ? (activeWsState.connecting ? "Connecting..." : (activeWsState.connected ? "Disconnect" : "Connect")) : <SendHorizontal className="h-3 w-3 lg:h-4 lg:w-4" />}
-          {isWebSocketRequest ? null : (isSending ? "Sending" : "Send")}
+          {isWebSocketRequest ? (activeWsState.connecting ? "Connecting..." : (activeWsState.connected ? "Disconnect" : "Connect")) : isGrpcRequest ? null : <SendHorizontal className="h-3 w-3 lg:h-4 lg:w-4" />}
+          {isWebSocketRequest ? null : (isGrpcRequest ? "Start" : (isSending ? "Sending" : "Send"))}
         </Button>
       </div>
+
+      {isGrpcRequest ? (
+        <div className="flex items-center justify-between border-b border-border/20 bg-background/10 px-3 py-2 text-[11px] text-muted-foreground">
+          <div className="truncate">{state.grpcProtoFilePath || "No .proto file selected"}</div>
+          <Button type="button" variant="outline" size="sm" className="h-7 gap-1.5 px-2.5 text-[11px]" onClick={handleGrpcProtoBrowse}>
+            <FileCode2 className="h-3.5 w-3.5" /> Proto
+          </Button>
+        </div>
+      ) : null}
 
       {isWebSocketRequest && activeWsState.error ? (
         <div className="flex items-center gap-2 border-b border-amber-500/20 bg-amber-500/[0.08] px-3 py-1.5 text-[11px] text-amber-500 dark:text-amber-400">
@@ -819,6 +934,8 @@ export function RequestPane({
         {activeTab === "Headers" ? (
           isWebSocketRequest ? (
             <WebSocketHeadersPanel headers={state.headers} onHeadersChange={onHeadersChange} />
+          ) : isGrpcRequest ? (
+            <GrpcHeadersPanel headers={state.headers} onHeadersChange={onHeadersChange} />
           ) : (
             <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
               <label className="flex items-center gap-2 border-b border-border/20 px-4 py-2.5 text-[11px] text-muted-foreground lg:text-[12px] bg-background/10 cursor-pointer hover:bg-background/20 transition-colors">
@@ -836,6 +953,26 @@ export function RequestPane({
         ) : null}
 
         {activeTab === "Body" ? (
+          isGrpcRequest ? (
+            <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-background/10">
+              <div className="flex items-center justify-between gap-3 border-b border-border/20 px-3 py-2 text-[11px] text-muted-foreground">
+                <SelectMenu
+                  value={state.grpcStreamingMode || "bidi"}
+                  options={grpcStreamingModes}
+                  onChange={(mode) => onChange("grpcStreamingMode", mode)}
+                  className="min-w-[220px]"
+                />
+                <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Body</div>
+              </div>
+              <CodeEditor
+                value={state.body}
+                onChange={(value) => onChange("body", value)}
+                placeholder={"{\n\n}"}
+                language="json"
+                disabled={false}
+              />
+            </div>
+          ) : (
           <div className={cn("grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]", isPlainBodySurface && "bg-background/10")}>
             <div className="flex items-center justify-between gap-3 border-b border-border/20 px-3 py-2 text-[11px] text-muted-foreground">
               <div className="flex items-center gap-2">
@@ -917,6 +1054,7 @@ export function RequestPane({
               />
             ) : null}
           </div>
+          )
         ) : null}
 
         {activeTab === "Auth" ? (

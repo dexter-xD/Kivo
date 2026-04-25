@@ -37,7 +37,8 @@ function getRequestModeTemplate(mode) {
     case REQUEST_MODES.GRPC:
       return {
         method: "POST",
-        bodyType: "none",
+        bodyType: "json",
+        activeEditorTab: "Body",
         headers: [{ key: "Content-Type", value: "application/grpc", enabled: true }]
       };
     case REQUEST_MODES.WEBSOCKET:
@@ -118,6 +119,9 @@ export function createRequest(name = "New Request", mode = REQUEST_MODES.HTTP) {
     bodyRows: [],
     bodyFilePath: "",
     graphqlVariables: template.graphqlVariables ?? "{\n\n}",
+    grpcProtoFilePath: "",
+    grpcMethodPath: "",
+    grpcStreamingMode: "bidi",
     docs: "",
     activeEditorTab: template.activeEditorTab ?? "Params",
     activeResponseTab: "Body",
@@ -237,6 +241,11 @@ export function normalizeRequestRecord(request) {
     bodyRows: Array.isArray(request?.bodyRows) ? request.bodyRows : [],
     bodyFilePath: typeof request?.bodyFilePath === "string" ? request.bodyFilePath : "",
     graphqlVariables: normalizedGraphqlVariables,
+    grpcProtoFilePath: typeof request?.grpcProtoFilePath === "string" ? request.grpcProtoFilePath : "",
+    grpcMethodPath: typeof request?.grpcMethodPath === "string" ? request.grpcMethodPath : "",
+    grpcStreamingMode: ["unary", "server_stream", "client_stream", "bidi"].includes(request?.grpcStreamingMode)
+      ? request.grpcStreamingMode
+      : "bidi",
     tags: Array.isArray(request?.tags) ? request.tags.map((tag) => String(tag)) : [],
     urlEncoding: request?.urlEncoding ?? true,
     followRedirects: request?.followRedirects ?? true,
