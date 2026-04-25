@@ -424,7 +424,7 @@ function GraphQLEditor({ query, variables, onQueryChange, onVariablesChange, dis
   );
 }
 
-function SelectMenu({ value, options, onChange, className, renderValue, renderOption, buttonClassName }) {
+function SelectMenu({ value, options, onChange, className, renderValue, renderOption, buttonClassName, disabled = false }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const selected = options.find((option) => option.value === value) ?? options[0];
@@ -455,17 +455,21 @@ function SelectMenu({ value, options, onChange, className, renderValue, renderOp
     <div ref={rootRef} className={cn("relative", className)}>
       <button
         type="button"
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => {
+          if (disabled) return;
+          setOpen((current) => !current);
+        }}
+        disabled={disabled}
         className={cn(
-          "flex h-8 w-full items-center justify-between border border-border/35 bg-background/30 px-3 text-left text-[12px] text-foreground outline-none transition-colors hover:bg-background/45 focus-visible:ring-1 focus-visible:ring-ring",
+          "flex h-8 w-full items-center justify-between border border-border/35 bg-background/30 px-3 text-left text-[12px] text-foreground outline-none transition-colors hover:bg-background/45 focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-70",
           buttonClassName
         )}
       >
         <span className="truncate">{renderValue ? renderValue(selected) : selected.label}</span>
-        <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform", open && "rotate-180")} />
+        <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform", !disabled && open && "rotate-180")} />
       </button>
 
-      {open ? (
+      {open && !disabled ? (
         <div className="absolute left-0 top-[calc(100%+4px)] z-30 min-w-full overflow-hidden border border-border/45 bg-popover">
           {options.map((option) => {
             const active = option.value === value;
@@ -683,6 +687,10 @@ export function RequestPane({
   const selectedGrpcMethod = useMemo(
     () => grpcMethods.find((option) => option.value === state.grpcMethodPath) || null,
     [grpcMethods, state.grpcMethodPath]
+  );
+  const selectedGrpcStreamingOption = useMemo(
+    () => grpcStreamingModes.find((option) => option.value === (selectedGrpcMethod?.streamingMode || state.grpcStreamingMode || "bidi")) || grpcStreamingModes[0],
+    [selectedGrpcMethod, state.grpcStreamingMode]
   );
   const hasGrpcMethodSelected = isGrpcRequest && Boolean(selectedGrpcMethod);
 
@@ -1007,10 +1015,11 @@ export function RequestPane({
             <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-background/10">
               <div className="flex items-center justify-between gap-3 border-b border-border/20 px-3 py-2 text-[11px] text-muted-foreground">
                 <SelectMenu
-                  value={state.grpcStreamingMode || "bidi"}
-                  options={grpcStreamingModes}
+                  value={selectedGrpcStreamingOption.value}
+                  options={[selectedGrpcStreamingOption]}
                   onChange={(mode) => onChange("grpcStreamingMode", mode)}
                   className="min-w-[220px]"
+                  disabled
                 />
                 <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Body</div>
               </div>

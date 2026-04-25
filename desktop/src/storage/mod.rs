@@ -126,7 +126,7 @@ fn parse_grpc_methods(content: &str) -> Vec<GrpcMethodOption> {
             continue;
         }
 
-        if line.contains('}') {
+        if line.starts_with('}') {
             current_service = None;
             pending_service = None;
             continue;
