@@ -12,10 +12,15 @@ pub mod io;
 pub mod models;
 
 pub use models::{
-    default_state, AuthRecord, CollectionConfig, CollectionRecord, CollectionScripts, EnvVar,
-    EnvVarsResult, ImportedCollectionResult, ImportedRequestsResult, KeyValueRow, OAuthConfig,
-    PersistedAppState, RequestRecord, RequestTextOrJson, ResponseMeta, SavedResponse,
-    StoragePathValidationResult, StorageSwitchPayload, WorkspaceFile, WorkspaceRecord,
+    default_state, CollectionConfig, CollectionRecord, EnvVar, EnvVarsResult,
+    ImportedCollectionResult, ImportedRequestsResult, PersistedAppState, RequestRecord,
+    StoragePathValidationResult, StorageSwitchPayload, WorkspaceFile,
+};
+
+#[cfg(test)]
+pub use models::{
+    AuthRecord, CollectionScripts, KeyValueRow, OAuthConfig, RequestTextOrJson, ResponseMeta,
+    SavedResponse, WorkspaceRecord,
 };
 
 
@@ -26,9 +31,11 @@ pub use export::{build_export_value, serialize_export_value};
 pub use io::{
     fs_get_env_vars, fs_load_workspaces, fs_save_collection_config, fs_save_env_vars,
     fs_save_workspaces, get_collection_dir, load_collection_config_from_path, load_env_vars,
-    parse_env_file_ordered, sanitize_name, write_env_file,
     WORKSPACE_FILE_NAME,
 };
+
+#[cfg(test)]
+pub use io::{parse_env_file_ordered, sanitize_name, write_env_file};
 
 fn get_state_path(app: &AppHandle) -> Result<PathBuf, String> {
     let app_dir = app
