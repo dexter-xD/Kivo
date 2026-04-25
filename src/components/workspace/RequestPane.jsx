@@ -865,6 +865,7 @@ export function RequestPane({
   const [sendErrorTitle, setSendErrorTitle] = useState("");
   const [sendErrorTrace, setSendErrorTrace] = useState("");
   const seenErrorKeyRef = useRef("");
+  const grpcMethodRecoveryRef = useRef({ requestKey: "", shouldRecover: false, attempted: false });
   const activeWsState = wsState ?? {
     connected: false,
     connecting: false,
@@ -920,6 +921,18 @@ export function RequestPane({
     return Array.from(new Set([...grpcDirectProtoFiles, ...fromDirectories]));
   }, [grpcDirectProtoFiles, grpcProtoDirectories]);
   const grpcSelectedProtoFileName = getPathFileName(state.grpcProtoFilePath);
+
+  useEffect(() => {
+    const requestKey = `${workspaceName || ""}::${collectionName || ""}::${state.name || ""}`;
+    if (grpcMethodRecoveryRef.current.requestKey === requestKey) return;
+    grpcMethodRecoveryRef.current = {
+      requestKey,
+      shouldRecover: isGrpcRequest
+        && Boolean(String(state.grpcProtoFilePath || "").trim())
+        && !Boolean(String(state.grpcMethodPath || "").trim()),
+      attempted: false
+    };
+  }, [collectionName, isGrpcRequest, state.grpcMethodPath, state.grpcProtoFilePath, state.name, workspaceName]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedState(state), 500);
@@ -1019,6 +1032,20 @@ export function RequestPane({
       onChange("grpcStreamingMode", selectedGrpcMethod.streamingMode);
     }
   }, [isGrpcRequest, onChange, selectedGrpcMethod, state.grpcStreamingMode]);
+
+  useEffect(() => {
+    const recoveryState = grpcMethodRecoveryRef.current;
+    if (!isGrpcRequest || !recoveryState.shouldRecover || recoveryState.attempted) return;
+    if (!hasGrpcProtoSelected || isGrpcMethodsLoading) return;
+
+    recoveryState.attempted = true;
+    if (!Array.isArray(grpcMethods) || grpcMethods.length === 0) return;
+    if (String(state.grpcMethodPath || "").trim()) return;
+
+    const preferred = grpcMethods.find((method) => method?.streamingMode === state.grpcStreamingMode) || grpcMethods[0];
+    if (!preferred?.value) return;
+    onChange("grpcMethodPath", preferred.value);
+  }, [grpcMethods, hasGrpcProtoSelected, isGrpcMethodsLoading, isGrpcRequest, onChange, state.grpcMethodPath, state.grpcStreamingMode]);
 
   const missingVars = useMemo(() => {
     if (!envVars) return [];
