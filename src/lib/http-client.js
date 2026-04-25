@@ -4,6 +4,10 @@ export function sendHttpRequest(payload) {
   return invoke("send_http_request", { payload });
 }
 
+export function sendGrpcRequest(payload) {
+  return invoke("send_grpc_request", { payload });
+}
+
 function sanitizeRequestForSave(request) {
   const bodyType = String(request?.bodyType ?? "json");
 

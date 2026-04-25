@@ -3,7 +3,10 @@
 mod http;
 mod storage;
 
-use http::client::{cancel_http_request, cancel_oauth_exchange, oauth_exchange_token, send_http_request};
+use http::client::{
+    cancel_http_request, cancel_oauth_exchange, oauth_exchange_token, send_grpc_request,
+    send_http_request,
+};
 use storage::{
     export_collection_file, export_request_file,
     get_app_config, get_default_storage_path, get_env_vars, get_resolved_storage_path,
@@ -21,6 +24,7 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             send_http_request,
+            send_grpc_request,
             cancel_http_request,
             oauth_exchange_token,
             cancel_oauth_exchange,

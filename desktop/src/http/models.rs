@@ -106,6 +106,24 @@ pub struct RequestPayload {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct GrpcRequestPayload {
+    pub url: String,
+    pub grpc_proto_file_path: String,
+    pub grpc_method_path: String,
+    #[serde(default)]
+    pub grpc_streaming_mode: String,
+    #[serde(default)]
+    pub headers: HashMap<String, String>,
+    #[serde(default)]
+    pub body: Option<String>,
+    #[serde(default)]
+    pub workspace_name: String,
+    #[serde(default)]
+    pub collection_name: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OAuthTokenExchangePayload {
     #[serde(default)]
     pub workspace_name: String,

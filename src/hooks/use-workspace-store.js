@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { invoke } from "@tauri-apps/api/core";
 
-import { cancelHttpRequest, loadAppState, saveAppState, sendHttpRequest } from "@/lib/http-client.js";
+import { cancelHttpRequest, loadAppState, saveAppState, sendGrpcRequest, sendHttpRequest } from "@/lib/http-client.js";
 import { buildRequestPayload, buildUrlWithParams, serializeHeaders } from "@/lib/http-ui.js";
 import {
   cloneRequest,
@@ -1466,15 +1466,9 @@ export function useWorkspaceStore() {
       return;
     }
 
-    if (
-      activeRequest.requestMode === REQUEST_MODES.SOCKET_IO
-      || activeRequest.requestMode === REQUEST_MODES.GRPC
-    ) {
-      const label = activeRequest.requestMode === REQUEST_MODES.GRPC
-        ? "gRPC"
-        : "Socket.IO";
+    if (activeRequest.requestMode === REQUEST_MODES.SOCKET_IO) {
       const savedAt = formatSavedAt();
-      const message = `${label} send is not available yet. You can still create and configure ${label} requests now.`;
+      const message = "Socket.IO send is not available yet. You can still create and configure Socket.IO requests now.";
 
       updateStore((current) => updateRequestWithLocalResponse(current, activeRequest.name, {
         status: 0,
@@ -1493,6 +1487,183 @@ export function useWorkspaceStore() {
         },
         savedAt
       }));
+      return;
+    }
+
+    if (activeRequest.requestMode === REQUEST_MODES.GRPC) {
+      const resolvedUrl = normalizeUrl(activeRequest.url || "");
+      if (!resolvedUrl) {
+        const savedAt = formatSavedAt();
+        const message = "Enter a valid gRPC server URL before sending.";
+        updateStore((current) => updateRequestWithLocalResponse(current, activeRequest.name, {
+          status: 0,
+          badge: "Request warning",
+          statusText: "Request warning",
+          duration: "-",
+          size: "0 B",
+          headers: {},
+          cookies: [],
+          body: message,
+          rawBody: message,
+          isJson: false,
+          meta: {
+            url: activeRequest.url || "-",
+            method: activeRequest.method
+          },
+          savedAt
+        }));
+        return;
+      }
+
+      if (!String(activeRequest.grpcProtoFilePath || "").trim()) {
+        const savedAt = formatSavedAt();
+        const message = "Select a .proto file before sending a gRPC request.";
+        updateStore((current) => updateRequestWithLocalResponse(current, activeRequest.name, {
+          status: 0,
+          badge: "Request warning",
+          statusText: "Request warning",
+          duration: "-",
+          size: "0 B",
+          headers: {},
+          cookies: [],
+          body: message,
+          rawBody: message,
+          isJson: false,
+          meta: {
+            url: resolvedUrl,
+            method: activeRequest.method
+          },
+          savedAt
+        }));
+        return;
+      }
+
+      if (!String(activeRequest.grpcMethodPath || "").trim()) {
+        const savedAt = formatSavedAt();
+        const message = "Select a gRPC method before sending.";
+        updateStore((current) => updateRequestWithLocalResponse(current, activeRequest.name, {
+          status: 0,
+          badge: "Request warning",
+          statusText: "Request warning",
+          duration: "-",
+          size: "0 B",
+          headers: {},
+          cookies: [],
+          body: message,
+          rawBody: message,
+          isJson: false,
+          meta: {
+            url: resolvedUrl,
+            method: activeRequest.method
+          },
+          savedAt
+        }));
+        return;
+      }
+
+      const requestId = `grpc-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      activeHttpRequestIdRef.current = requestId;
+      setIsSending(true);
+      setSendStartedAt(Date.now());
+
+      try {
+        const result = await sendGrpcRequest({
+          requestId,
+          url: resolvedUrl,
+          grpcProtoFilePath: activeRequest.grpcProtoFilePath,
+          grpcMethodPath: activeRequest.grpcMethodPath,
+          grpcStreamingMode: activeRequest.grpcStreamingMode || "bidi",
+          headers: serializeHeaders(activeRequest.headers ?? [], { type: "none" }, "none", ""),
+          body: String(activeRequest.body || ""),
+          workspaceName: activeWorkspace?.name ?? "",
+          collectionName: activeCollection?.name ?? ""
+        });
+
+        if (activeHttpRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        const rawBody = String(result?.body || "");
+        const formattedBody = formatResponseBody(rawBody);
+        const bodySize = new TextEncoder().encode(rawBody).length;
+        const responseIsJson = isJsonText(rawBody);
+        const savedAt = formatSavedAt();
+        const statusCode = Number(result?.status || 0);
+        const statusText = String(result?.statusText || "OK");
+        const savedResponse = {
+          status: statusCode,
+          badge: `${statusCode} ${statusText}`,
+          statusText: `${statusCode} ${statusText}`,
+          duration: `${Number(result?.durationMs || 0)} ms`,
+          size: `${bodySize} B`,
+          headers: result?.headers || {},
+          cookies: [],
+          body: formattedBody,
+          rawBody,
+          isJson: responseIsJson,
+          meta: {
+            url: resolvedUrl,
+            method: activeRequest.grpcMethodPath
+          },
+          savedAt
+        };
+
+        updateStore((current) => ({
+          ...current,
+          workspaces: current.workspaces.map((workspace) => {
+            if (workspace.name !== current.activeWorkspaceName) return workspace;
+            return {
+              ...workspace,
+              collections: workspace.collections.map((collection) => {
+                if (collection.name !== current.activeCollectionName) return collection;
+                return {
+                  ...collection,
+                  requests: collection.requests.map((request) =>
+                    request.name === activeRequest.name
+                      ? {
+                        ...request,
+                        responseBodyView: responseIsJson ? "JSON" : "Raw",
+                        lastResponse: savedResponse
+                      }
+                      : request
+                  )
+                };
+              })
+            };
+          })
+        }));
+      } catch (error) {
+        if (activeHttpRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        const message = error?.toString?.() || "gRPC request failed";
+        const savedAt = formatSavedAt();
+        updateStore((current) => updateRequestWithLocalResponse(current, activeRequest.name, {
+          status: 500,
+          badge: "Failed",
+          statusText: "Request failed",
+          duration: "-",
+          size: "0 B",
+          headers: {},
+          cookies: [],
+          body: message,
+          rawBody: message,
+          isJson: false,
+          meta: {
+            url: resolvedUrl,
+            method: activeRequest.grpcMethodPath
+          },
+          savedAt
+        }));
+      } finally {
+        if (activeHttpRequestIdRef.current === requestId) {
+          activeHttpRequestIdRef.current = "";
+          setIsSending(false);
+          setSendStartedAt(0);
+        }
+      }
+
       return;
     }
 

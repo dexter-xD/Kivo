@@ -10,5 +10,6 @@ desktop/target/
 .superpowers/
 
 # mock servers
+/mock-servers/
 /oauth-mock-server/
 /collection-examples/
