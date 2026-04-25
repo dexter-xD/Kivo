@@ -122,6 +122,8 @@ export function createRequest(name = "New Request", mode = REQUEST_MODES.HTTP) {
     grpcProtoFilePath: "",
     grpcMethodPath: "",
     grpcStreamingMode: "bidi",
+    grpcDirectProtoFiles: [],
+    grpcProtoDirectories: [],
     docs: "",
     activeEditorTab: template.activeEditorTab ?? "Params",
     activeResponseTab: "Body",
@@ -246,6 +248,19 @@ export function normalizeRequestRecord(request) {
     grpcStreamingMode: ["unary", "server_stream", "client_stream", "bidi"].includes(request?.grpcStreamingMode)
       ? request.grpcStreamingMode
       : "bidi",
+    grpcDirectProtoFiles: Array.isArray(request?.grpcDirectProtoFiles)
+      ? request.grpcDirectProtoFiles.map((path) => String(path || "").trim()).filter(Boolean)
+      : [],
+    grpcProtoDirectories: Array.isArray(request?.grpcProtoDirectories)
+      ? request.grpcProtoDirectories
+        .map((group) => ({
+          path: String(group?.path || "").trim(),
+          files: Array.isArray(group?.files)
+            ? group.files.map((path) => String(path || "").trim()).filter(Boolean)
+            : []
+        }))
+        .filter((group) => group.path)
+      : [],
     tags: Array.isArray(request?.tags) ? request.tags.map((tag) => String(tag)) : [],
     urlEncoding: request?.urlEncoding ?? true,
     followRedirects: request?.followRedirects ?? true,
@@ -263,6 +278,11 @@ export function cloneRequest(request) {
     queryParams: (request.queryParams || []).map((row) => ({ ...row })),
     headers: (request.headers || []).map((row) => ({ ...row })),
     bodyRows: (request.bodyRows || []).map((row) => ({ ...row })),
+    grpcDirectProtoFiles: (request.grpcDirectProtoFiles || []).map((path) => String(path)),
+    grpcProtoDirectories: (request.grpcProtoDirectories || []).map((group) => ({
+      path: String(group?.path || ""),
+      files: Array.isArray(group?.files) ? group.files.map((path) => String(path)) : []
+    })),
     tags: (request.tags || []).map((tag) => String(tag)),
     auth: normalizeAuthState(request.auth),
     lastResponse: request.lastResponse ? { ...request.lastResponse } : null

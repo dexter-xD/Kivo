@@ -22,6 +22,8 @@ fn empty_request(name: String, method: String, url: String) -> RequestRecord {
         grpc_proto_file_path: String::new(),
         grpc_method_path: String::new(),
         grpc_streaming_mode: "bidi".to_string(),
+        grpc_direct_proto_files: vec![],
+        grpc_proto_directories: vec![],
         docs: String::new(),
         tags: vec![],
         url_encoding: true,

@@ -10,6 +10,14 @@ pub struct EnvVar {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct GrpcProtoDirectoryRecord {
+    pub path: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub files: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ImportedCollectionResult {
     pub detected_format: String,
     pub collection: CollectionRecord,
@@ -187,6 +195,10 @@ pub struct RequestRecord {
     pub grpc_method_path: String,
     #[serde(default = "default_grpc_streaming_mode")]
     pub grpc_streaming_mode: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub grpc_direct_proto_files: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub grpc_proto_directories: Vec<GrpcProtoDirectoryRecord>,
     #[serde(default)]
     pub docs: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

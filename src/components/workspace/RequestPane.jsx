@@ -157,7 +157,7 @@ function GrpcHeadersPanel({ headers, onHeadersChange }) {
       <div className="border-b border-border/20 px-3 py-2 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
         gRPC Transport Headers
       </div>
-      <div className="thin-scrollbar min-h-0 overflow-auto bg-background/10">
+      <div className="thin-scrollbar min-h-0 overflow-auto">
         {systemHeaders.map((row) => (
           <div key={row.key} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] border-b border-border/10 px-3 py-2 text-[12px]">
             <div className="text-foreground">{row.key}</div>
@@ -859,8 +859,6 @@ export function RequestPane({
   const [isGrpcMethodsLoading, setIsGrpcMethodsLoading] = useState(false);
   const [grpcMethodError, setGrpcMethodError] = useState("");
   const [isGrpcProtoPickerOpen, setIsGrpcProtoPickerOpen] = useState(false);
-  const [grpcDirectProtoFiles, setGrpcDirectProtoFiles] = useState([]);
-  const [grpcProtoDirectories, setGrpcProtoDirectories] = useState([]);
   const [showReflectionTooltip, setShowReflectionTooltip] = useState(false);
   const [grpcBodyNotice, setGrpcBodyNotice] = useState("");
   const [showSendErrorModal, setShowSendErrorModal] = useState(false);
@@ -883,9 +881,17 @@ export function RequestPane({
     () => grpcStreamingModes.find((option) => option.value === (selectedGrpcMethod?.streamingMode || state.grpcStreamingMode || "bidi")) || grpcStreamingModes[0],
     [selectedGrpcMethod, state.grpcStreamingMode]
   );
-  const hasGrpcMethodSelected = isGrpcRequest && Boolean(selectedGrpcMethod);
+  const hasGrpcMethodSelected = isGrpcRequest && Boolean(String(state.grpcMethodPath || "").trim());
   const grpcBodyHeading = selectedGrpcStreamingOption?.label || "Body";
   const hasValidGrpcUrl = isGrpcRequest && Boolean(String(state.url || "").trim());
+  const grpcDirectProtoFiles = useMemo(
+    () => (Array.isArray(state.grpcDirectProtoFiles) ? state.grpcDirectProtoFiles : []),
+    [state.grpcDirectProtoFiles]
+  );
+  const grpcProtoDirectories = useMemo(
+    () => (Array.isArray(state.grpcProtoDirectories) ? state.grpcProtoDirectories : []),
+    [state.grpcProtoDirectories]
+  );
 
   const visibleTabs = isWebSocketRequest
     ? ["Params", "Body", "Auth", "Headers", "Docs"]
@@ -988,8 +994,8 @@ export function RequestPane({
     if (!current) return;
     const hasCurrent = grpcAllKnownProtoPaths.some((path) => normalizePath(path) === normalizePath(current));
     if (hasCurrent) return;
-    setGrpcDirectProtoFiles((paths) => (paths.some((path) => normalizePath(path) === normalizePath(current)) ? paths : [...paths, current]));
-  }, [grpcAllKnownProtoPaths, isGrpcRequest, state.grpcProtoFilePath]);
+    onChange("grpcDirectProtoFiles", [...grpcDirectProtoFiles, current]);
+  }, [grpcAllKnownProtoPaths, grpcDirectProtoFiles, isGrpcRequest, onChange, state.grpcProtoFilePath]);
 
   useEffect(() => {
     const status = Number(response?.status || 0);
@@ -1108,10 +1114,8 @@ export function RequestPane({
         filters: [{ name: "Protocol Buffers", extensions: ["proto"] }]
       });
       if (typeof selected !== "string") return;
-      setGrpcDirectProtoFiles((current) => {
-        if (current.some((path) => normalizePath(path) === normalizePath(selected))) return current;
-        return [...current, selected];
-      });
+      if (grpcDirectProtoFiles.some((path) => normalizePath(path) === normalizePath(selected))) return;
+      onChange("grpcDirectProtoFiles", [...grpcDirectProtoFiles, selected]);
     } catch {
     }
   }
@@ -1121,12 +1125,10 @@ export function RequestPane({
       const selected = await open({ directory: true, multiple: false });
       if (typeof selected !== "string") return;
       const files = await listGrpcProtoFilesInDirectory(selected);
-      setGrpcProtoDirectories((current) => {
-        const nextFiles = Array.isArray(files) ? files : [];
-        const filtered = nextFiles.filter((path) => String(path || "").trim());
-        const without = current.filter((group) => normalizePath(group.path) !== normalizePath(selected));
-        return [...without, { path: selected, files: filtered }];
-      });
+      const nextFiles = Array.isArray(files) ? files : [];
+      const filtered = nextFiles.filter((path) => String(path || "").trim());
+      const without = grpcProtoDirectories.filter((group) => normalizePath(group.path) !== normalizePath(selected));
+      onChange("grpcProtoDirectories", [...without, { path: selected, files: filtered }]);
     } catch {
     }
   }
@@ -1139,7 +1141,7 @@ export function RequestPane({
   }
 
   function handleGrpcDirectFileRemove(path) {
-    setGrpcDirectProtoFiles((current) => current.filter((entry) => normalizePath(entry) !== normalizePath(path)));
+    onChange("grpcDirectProtoFiles", grpcDirectProtoFiles.filter((entry) => normalizePath(entry) !== normalizePath(path)));
     if (state.grpcProtoFilePath === path) {
       onChange("grpcProtoFilePath", "");
       onChange("grpcMethodPath", "");
@@ -1148,7 +1150,7 @@ export function RequestPane({
 
   function handleGrpcDirectoryRemove(dirPath) {
     const removedGroup = grpcProtoDirectories.find((group) => normalizePath(group.path) === normalizePath(dirPath));
-    setGrpcProtoDirectories((current) => current.filter((group) => normalizePath(group.path) !== normalizePath(dirPath)));
+    onChange("grpcProtoDirectories", grpcProtoDirectories.filter((group) => normalizePath(group.path) !== normalizePath(dirPath)));
     if (!removedGroup) return;
     if ((removedGroup.files || []).some((path) => normalizePath(path) === normalizePath(state.grpcProtoFilePath))) {
       onChange("grpcProtoFilePath", "");
@@ -1157,10 +1159,11 @@ export function RequestPane({
   }
 
   function handleGrpcDirectoryFileRemove(dirPath, filePath) {
-    setGrpcProtoDirectories((current) => current.map((group) => {
+    const nextDirectories = grpcProtoDirectories.map((group) => {
       if (normalizePath(group.path) !== normalizePath(dirPath)) return group;
       return { ...group, files: (group.files || []).filter((path) => normalizePath(path) !== normalizePath(filePath)) };
-    }).filter((group) => (group.files || []).length > 0));
+    }).filter((group) => (group.files || []).length > 0);
+    onChange("grpcProtoDirectories", nextDirectories);
     if (normalizePath(state.grpcProtoFilePath) === normalizePath(filePath)) {
       onChange("grpcProtoFilePath", "");
       onChange("grpcMethodPath", "");
@@ -1330,7 +1333,7 @@ export function RequestPane({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden">
+      <div className={cn("min-h-0 flex-1 overflow-hidden", isGrpcRequest && "bg-background/10")}>
         {activeTab === "Params" ? (
           <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] text-[12px]">
             <div className="border-b border-border/20 px-3 py-3">
@@ -1364,7 +1367,7 @@ export function RequestPane({
 
         {activeTab === "Body" ? (
           isGrpcRequest && hasGrpcMethodSelected ? (
-            <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-background/10">
+            <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
               <div className="flex items-center justify-between gap-3 border-b border-border/20 px-3 py-2 text-[11px] text-muted-foreground">
                 <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-cyan-300">{grpcBodyHeading}</div>
                 <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Body</div>
