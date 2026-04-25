@@ -355,7 +355,7 @@ function WebSocketHeadersPanel({ headers, onHeadersChange }) {
       <div className="border-b border-border/20 px-3 py-2 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
         Handshake Headers
       </div>
-      <div className="thin-scrollbar min-h-0 overflow-auto bg-background/10">
+      <div className="thin-scrollbar min-h-0 overflow-auto bg-background/20">
         {systemHeaders.map((row) => (
           <div key={row.key} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] border-b border-border/10 px-3 py-2 text-[12px]">
             <div className="text-foreground">{row.key}</div>
@@ -454,7 +454,7 @@ function TableEditor({
   const activeCount = rows.filter((row) => row.enabled && row.key.trim()).length;
 
   return (
-    <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background/10">
+    <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-background/20">
       <div className="flex items-center justify-between border-b border-border/20 px-3 py-2 text-[11px] text-muted-foreground lg:text-[12px]">
         <div className="flex items-center gap-3">
           <span className="font-medium text-foreground">{title}</span>
@@ -522,7 +522,7 @@ function TableEditor({
           <div className="thin-scrollbar min-h-0 overflow-auto">
             {rows.length > 0 ? (
               rows.map((row, index) => (
-                <div key={row.id || `row-${index}`} className={cn("grid grid-cols-[32px_minmax(0,1fr)_minmax(0,1fr)_36px] border-b border-border/10 px-1", index % 2 === 0 && "bg-background/5")}>
+                <div key={row.id || `row-${index}`} className="grid grid-cols-[32px_minmax(0,1fr)_minmax(0,1fr)_36px] border-b border-border/10 px-1">
                   <label className="flex items-center justify-center">
                     <input disabled={disabled} type="checkbox" checked={row.enabled ?? true} onChange={(event) => updateRow(index, "enabled", event.target.checked)} />
                   </label>
@@ -565,7 +565,7 @@ function GraphQLEditor({ query, variables, onQueryChange, onVariablesChange, dis
   }
 
   return (
-    <div className="grid h-full min-h-0 grid-rows-[minmax(0,1fr)_auto_minmax(0,1fr)] overflow-hidden bg-background/10">
+    <div className="grid h-full min-h-0 grid-rows-[minmax(0,1fr)_auto_minmax(0,1fr)] overflow-hidden bg-background/20">
       <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)]">
         <div className="flex items-center justify-between border-b border-border/20 px-3 py-2 text-[11px] text-muted-foreground lg:text-[12px]">
           <span className="font-medium text-foreground">Query</span>
@@ -905,10 +905,6 @@ export function RequestPane({
   const isGraphqlBody = state.bodyType === "graphql";
   const isTableBody = state.bodyType === "form-data" || state.bodyType === "form-urlencoded";
   const isFileBody = state.bodyType === "file";
-  const isPlainBodySurface = state.bodyType === "none"
-    || state.bodyType === "xml"
-    || state.bodyType === "yaml"
-    || state.bodyType === "text";
 
   const [debouncedState, setDebouncedState] = useState(state);
   const bodyCacheRef = useRef({});
@@ -1312,7 +1308,7 @@ export function RequestPane({
       </div>
 
       {isGrpcRequest ? (
-        <div className="flex items-center justify-between border-b border-border/20 bg-background/10 px-3 py-2 text-[11px] text-muted-foreground">
+        <div className="flex items-center justify-between border-b border-border/20 bg-background/20 px-3 py-2 text-[11px] text-muted-foreground">
           <div className="flex min-w-0 items-center gap-2 truncate">
             <FileText className="h-3.5 w-3.5 shrink-0 text-cyan-300" />
             <span className="truncate">{grpcSelectedProtoFileName || "No .proto file selected"}</span>
@@ -1360,7 +1356,7 @@ export function RequestPane({
         </div>
       </div>
 
-      <div className={cn("min-h-0 flex-1 overflow-hidden", isGrpcRequest && "bg-background/10")}>
+      <div className="min-h-0 flex-1 overflow-hidden bg-background/20">
         {activeTab === "Params" ? (
           <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] text-[12px]">
             <div className="border-b border-border/20 px-3 py-3">
@@ -1378,7 +1374,7 @@ export function RequestPane({
             <GrpcHeadersPanel headers={state.headers} onHeadersChange={onHeadersChange} />
           ) : (
             <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
-              <label className="flex items-center gap-2 border-b border-border/20 px-4 py-2.5 text-[11px] text-muted-foreground lg:text-[12px] bg-background/10 cursor-pointer hover:bg-background/20 transition-colors">
+              <label className="flex items-center gap-2 border-b border-border/20 bg-background/20 px-4 py-2.5 text-[11px] text-muted-foreground lg:text-[12px] cursor-pointer">
                 <input
                   type="checkbox"
                   className="accent-primary w-3 h-3.5 outline-none"
@@ -1413,7 +1409,7 @@ export function RequestPane({
               ) : null}
             </div>
           ) : (
-          <div className={cn("grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]", isPlainBodySurface && "bg-background/10")}>
+          <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
             <div className="flex items-center justify-between gap-3 border-b border-border/20 px-3 py-2 text-[11px] text-muted-foreground">
               <div className="flex items-center gap-2">
                 <SelectMenu
@@ -1462,7 +1458,7 @@ export function RequestPane({
             ) : null}
 
             {isFileBody ? (
-              <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-background/10">
+              <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-background/20">
                 <div className="flex items-center justify-between border-b border-border/20 px-3 py-2 text-[11px] text-muted-foreground lg:text-[12px]">
                   <span className="font-medium text-foreground">Request File</span>
                   <div className="flex items-center gap-2">
@@ -1498,7 +1494,7 @@ export function RequestPane({
         ) : null}
 
         {activeTab === "Auth" ? (
-          <div className="h-full bg-background/10">
+          <div className="h-full bg-background/20">
             <AuthPanel
               state={state}
               onAuthChange={onAuthChange}
