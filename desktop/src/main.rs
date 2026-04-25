@@ -8,7 +8,7 @@ use storage::{
     export_collection_file, export_request_file,
     get_app_config, get_default_storage_path, get_env_vars, get_resolved_storage_path,
     get_collection_config, import_collection_file, import_request_file, load_app_state, open_config_directory, reveal_item, save_app_state,
-    parse_grpc_proto_file,
+    parse_grpc_proto_file, list_grpc_proto_files_in_directory,
     save_collection_config, save_env_vars, set_storage_path, switch_storage_path,
     validate_storage_path,
 };
@@ -41,6 +41,7 @@ fn main() {
             import_collection_file,
             import_request_file,
             parse_grpc_proto_file,
+            list_grpc_proto_files_in_directory,
             export_collection_file,
             export_request_file,
         ])

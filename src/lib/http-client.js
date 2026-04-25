@@ -165,6 +165,10 @@ export function parseGrpcProtoFile(filePath) {
   return invoke("parse_grpc_proto_file", { filePath });
 }
 
+export function listGrpcProtoFilesInDirectory(dirPath) {
+  return invoke("list_grpc_proto_files_in_directory", { dirPath });
+}
+
 export function saveEnvVars(workspaceName, collectionName, vars) {
   return invoke("save_env_vars", {
     workspaceName,

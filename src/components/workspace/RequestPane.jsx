@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Braces, ChevronDown, Eye, EyeOff, FileCode2, Plus, SendHorizontal, Trash2, Wand2, PenLine, Table2 } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Braces, ChevronDown, Eye, EyeOff, FileCode2, FilePlus2, FolderPlus, Plus, RefreshCw, SendHorizontal, Trash2, Wand2, PenLine, Table2, X } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 
 import { CodeEditor } from "@/components/workspace/CodeEditor.jsx";
@@ -9,7 +10,7 @@ import { Input } from "@/components/ui/input.jsx";
 import { OAuth2Panel } from "@/components/workspace/OAuth2Panel.jsx";
 import { formatGraphqlText, formatJsonText } from "@/lib/formatters.js";
 import { getMethodTone, requestBodyModes } from "@/lib/http-ui.js";
-import { parseGrpcProtoFile } from "@/lib/http-client.js";
+import { listGrpcProtoFilesInDirectory, parseGrpcProtoFile } from "@/lib/http-client.js";
 import { REQUEST_MODES } from "@/lib/workspace-store.js";
 import { cn } from "@/lib/utils.js";
 import { EnvHighlightInput } from "@/components/ui/EnvHighlightInput.jsx";
@@ -157,6 +158,104 @@ function GrpcHeadersPanel({ headers, onHeadersChange }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function GrpcProtoPickerModal({
+  open,
+  selectedPath,
+  knownPaths,
+  onClose,
+  onSave,
+  onAddFile,
+  onAddDirectory,
+  onRemovePath,
+  loading,
+}) {
+  const [draftSelectedPath, setDraftSelectedPath] = useState(selectedPath || "");
+
+  useEffect(() => {
+    if (!open) return;
+    setDraftSelectedPath(selectedPath || "");
+  }, [open, selectedPath]);
+
+  if (!open) return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[260] flex items-center justify-center bg-background/70 p-6 backdrop-blur-sm"
+      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+    >
+      <Card className="grid h-[min(620px,92vh)] w-[min(940px,96vw)] grid-rows-[auto_auto_minmax(0,1fr)_auto] border border-border/50 bg-card/95 p-5 shadow-2xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-[28px] font-semibold text-foreground">Select Proto File</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="mb-3 flex items-center justify-between">
+          <div className="text-[13px] font-semibold text-foreground">Files</div>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" onClick={onAddDirectory} className="h-8 px-3 text-[12px]">
+              <FolderPlus className="mr-1 h-3.5 w-3.5" />
+              Add Directory
+            </Button>
+            <Button type="button" variant="outline" onClick={onAddFile} className="h-8 px-3 text-[12px]">
+              <FilePlus2 className="mr-1 h-3.5 w-3.5" />
+              Add Proto File
+            </Button>
+          </div>
+        </div>
+
+        <div className="thin-scrollbar min-h-0 overflow-auto border border-border/30 bg-background/10">
+          {knownPaths.length === 0 ? (
+            <div className="px-4 py-6 text-[12px] text-muted-foreground">No proto files added yet.</div>
+          ) : (
+            <div className="divide-y divide-border/20">
+              {knownPaths.map((path) => (
+                <div key={path} className="grid grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2">
+                  <input
+                    type="radio"
+                    name="grpc-proto-path"
+                    checked={draftSelectedPath === path}
+                    onChange={() => setDraftSelectedPath(path)}
+                    className="h-3.5 w-3.5 accent-primary"
+                  />
+                  <div className="truncate text-[12px] text-foreground">{path}</div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onRemovePath(path)}
+                    className="h-7 w-7"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button
+            type="button"
+            onClick={() => onSave(draftSelectedPath)}
+            disabled={!draftSelectedPath || loading}
+            className="h-9 px-6"
+          >
+            Save
+          </Button>
+        </div>
+      </Card>
+    </div>,
+    document.body
   );
 }
 
@@ -493,6 +592,7 @@ function SelectMenu({ value, options, onChange, className, renderValue, renderOp
           })}
         </div>
       ) : null}
+
     </div>
   );
 }
@@ -676,6 +776,10 @@ export function RequestPane({
   const [grpcMethods, setGrpcMethods] = useState([]);
   const [isGrpcMethodsLoading, setIsGrpcMethodsLoading] = useState(false);
   const [grpcMethodError, setGrpcMethodError] = useState("");
+  const [isGrpcProtoPickerOpen, setIsGrpcProtoPickerOpen] = useState(false);
+  const [grpcKnownProtoPaths, setGrpcKnownProtoPaths] = useState([]);
+  const [showReflectionTooltip, setShowReflectionTooltip] = useState(false);
+  const [grpcBodyNotice, setGrpcBodyNotice] = useState("");
   const activeWsState = wsState ?? {
     connected: false,
     connecting: false,
@@ -693,6 +797,8 @@ export function RequestPane({
     [selectedGrpcMethod, state.grpcStreamingMode]
   );
   const hasGrpcMethodSelected = isGrpcRequest && Boolean(selectedGrpcMethod);
+  const grpcBodyHeading = selectedGrpcStreamingOption?.label || "Body";
+  const hasValidGrpcUrl = isGrpcRequest && Boolean(String(state.url || "").trim());
 
   const visibleTabs = isWebSocketRequest
     ? ["Params", "Body", "Auth", "Headers", "Docs"]
@@ -775,6 +881,21 @@ export function RequestPane({
       cancelled = true;
     };
   }, [hasGrpcProtoSelected, isGrpcRequest, state.grpcProtoFilePath]);
+
+  useEffect(() => {
+    if (!isGrpcRequest) return;
+    if (!Array.isArray(grpcKnownProtoPaths) || grpcKnownProtoPaths.length === 0) return;
+    const current = String(state.grpcProtoFilePath || "").trim();
+    if (current) return;
+    onChange("grpcProtoFilePath", grpcKnownProtoPaths[0]);
+  }, [grpcKnownProtoPaths, isGrpcRequest, onChange, state.grpcProtoFilePath]);
+
+  useEffect(() => {
+    if (!isGrpcRequest) return;
+    const current = String(state.grpcProtoFilePath || "").trim();
+    if (!current) return;
+    setGrpcKnownProtoPaths((paths) => (paths.includes(current) ? paths : [...paths, current]));
+  }, [isGrpcRequest, state.grpcProtoFilePath]);
 
   useEffect(() => {
     if (!isGrpcRequest) return;
@@ -865,17 +986,77 @@ export function RequestPane({
 
   async function handleGrpcProtoBrowse() {
     try {
+      setIsGrpcProtoPickerOpen(true);
+    } catch {
+    }
+  }
+
+  async function handleGrpcAddProtoFile() {
+    try {
       const selected = await open({
         directory: false,
         multiple: false,
         filters: [{ name: "Protocol Buffers", extensions: ["proto"] }]
       });
-      if (typeof selected === "string") {
-        onChange("grpcProtoFilePath", selected);
-        onChange("grpcMethodPath", "");
+      if (typeof selected !== "string") return;
+      setGrpcKnownProtoPaths((current) => Array.from(new Set([...current, selected])));
+    } catch {
+    }
+  }
+
+  async function handleGrpcAddDirectory() {
+    try {
+      const selected = await open({ directory: true, multiple: false });
+      if (typeof selected !== "string") return;
+      const files = await listGrpcProtoFilesInDirectory(selected);
+      if (Array.isArray(files) && files.length > 0) {
+        setGrpcKnownProtoPaths((current) => Array.from(new Set([...current, ...files])));
       }
     } catch {
     }
+  }
+
+  function handleGrpcProtoPickerSave(path) {
+    if (!path) return;
+    onChange("grpcProtoFilePath", path);
+    onChange("grpcMethodPath", "");
+    setIsGrpcProtoPickerOpen(false);
+  }
+
+  function handleGrpcProtoRemove(path) {
+    setGrpcKnownProtoPaths((current) => current.filter((entry) => entry !== path));
+    if (state.grpcProtoFilePath === path) {
+      onChange("grpcProtoFilePath", "");
+      onChange("grpcMethodPath", "");
+    }
+  }
+
+  function handleGrpcBodyChange(value) {
+    onChange("body", value);
+    if (selectedGrpcMethod?.streamingMode === "unary") {
+      const trimmed = String(value || "").trim();
+      if (!trimmed) {
+        setGrpcBodyNotice("");
+        return;
+      }
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          setGrpcBodyNotice("Unary expects a single JSON object payload.");
+        } else {
+          setGrpcBodyNotice("");
+        }
+      } catch {
+        setGrpcBodyNotice("");
+      }
+      return;
+    }
+
+    setGrpcBodyNotice("");
+  }
+
+  function handleGrpcReflectionRefresh() {
+    if (!hasValidGrpcUrl) return;
   }
 
   return (
@@ -883,7 +1064,7 @@ export function RequestPane({
       <div className={cn(
         "grid gap-px border-b border-border/25 bg-border/20",
         isGrpcRequest
-          ? "grid-cols-[88px_minmax(0,1fr)_220px_92px] lg:grid-cols-[100px_minmax(0,1fr)_280px_108px]"
+          ? "grid-cols-[88px_minmax(0,1fr)_200px_34px_34px_92px] lg:grid-cols-[100px_minmax(0,1fr)_260px_40px_40px_108px]"
           : "grid-cols-[108px_minmax(0,1fr)_92px] lg:grid-cols-[124px_minmax(0,1fr)_108px]"
       )}>
         {isWebSocketRequest ? (
@@ -921,6 +1102,33 @@ export function RequestPane({
           )
         ) : null}
 
+        {isGrpcRequest ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 rounded-none text-muted-foreground lg:h-10"
+            disabled={!hasValidGrpcUrl}
+            onMouseEnter={() => setShowReflectionTooltip(true)}
+            onMouseLeave={() => setShowReflectionTooltip(false)}
+            onClick={handleGrpcReflectionRefresh}
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        ) : null}
+
+        {isGrpcRequest ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 rounded-none text-muted-foreground lg:h-10"
+            onClick={handleGrpcProtoBrowse}
+          >
+            <FileCode2 className="h-4 w-4" />
+          </Button>
+        ) : null}
+
         <Button
           className="h-8 gap-1.5 rounded-none px-2.5 text-[12px] lg:h-10 lg:text-[14px]"
           onClick={isWebSocketRequest ? (activeWsState.connected || activeWsState.connecting ? onWebSocketDisconnect : onWebSocketConnect) : onSend}
@@ -931,6 +1139,12 @@ export function RequestPane({
           {isWebSocketRequest ? null : (isGrpcRequest ? "Start" : (isSending ? "Sending" : "Send"))}
         </Button>
       </div>
+
+      {isGrpcRequest && showReflectionTooltip && hasValidGrpcUrl ? (
+        <div className="border-b border-border/20 bg-popover px-3 py-1.5 text-[11px] text-foreground">
+          Click to use server reflection
+        </div>
+      ) : null}
 
       {isGrpcRequest ? (
         <div className="flex items-center justify-between border-b border-border/20 bg-background/10 px-3 py-2 text-[11px] text-muted-foreground">
@@ -1014,22 +1228,21 @@ export function RequestPane({
           isGrpcRequest && hasGrpcMethodSelected ? (
             <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-background/10">
               <div className="flex items-center justify-between gap-3 border-b border-border/20 px-3 py-2 text-[11px] text-muted-foreground">
-                <SelectMenu
-                  value={selectedGrpcStreamingOption.value}
-                  options={[selectedGrpcStreamingOption]}
-                  onChange={(mode) => onChange("grpcStreamingMode", mode)}
-                  className="min-w-[220px]"
-                  disabled
-                />
+                <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-cyan-300">{grpcBodyHeading}</div>
                 <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground">Body</div>
               </div>
               <CodeEditor
                 value={state.body}
-                onChange={(value) => onChange("body", value)}
-                placeholder={"{\n\n}"}
+                onChange={handleGrpcBodyChange}
+                placeholder={selectedGrpcMethod?.streamingMode === "unary" ? "{\n  \"isbn\": 1\n}" : "[{\n  \"isbn\": 1\n}]"}
                 language="json"
                 disabled={false}
               />
+              {grpcBodyNotice ? (
+                <div className="border-t border-amber-500/20 bg-amber-500/[0.08] px-3 py-1.5 text-[11px] text-amber-500 dark:text-amber-400">
+                  {grpcBodyNotice}
+                </div>
+              ) : null}
             </div>
           ) : (
           <div className={cn("grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]", isPlainBodySurface && "bg-background/10")}>
@@ -1145,6 +1358,18 @@ export function RequestPane({
           <RequestSettingsPanel state={state} onChange={onChange} />
         ) : null}
       </div>
+
+      <GrpcProtoPickerModal
+        open={isGrpcProtoPickerOpen}
+        selectedPath={state.grpcProtoFilePath}
+        knownPaths={grpcKnownProtoPaths}
+        onClose={() => setIsGrpcProtoPickerOpen(false)}
+        onSave={handleGrpcProtoPickerSave}
+        onAddFile={handleGrpcAddProtoFile}
+        onAddDirectory={handleGrpcAddDirectory}
+        onRemovePath={handleGrpcProtoRemove}
+        loading={isGrpcMethodsLoading}
+      />
     </Card>
   );
 }

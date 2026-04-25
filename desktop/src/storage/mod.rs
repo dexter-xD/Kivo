@@ -46,6 +46,22 @@ pub struct GrpcMethodOption {
     pub streaming_mode: String,
 }
 
+#[tauri::command]
+pub fn list_grpc_proto_files_in_directory(dir_path: String) -> Result<Vec<String>, String> {
+    let dir = PathBuf::from(&dir_path);
+    if !dir.exists() {
+        return Err("Selected directory does not exist.".to_string());
+    }
+    if !dir.is_dir() {
+        return Err("Selected path is not a directory.".to_string());
+    }
+
+    let mut files = Vec::new();
+    collect_proto_files(&dir, &mut files)?;
+    files.sort_by(|a, b| a.to_lowercase().cmp(&b.to_lowercase()));
+    Ok(files)
+}
+
 fn parse_grpc_streaming_mode(req_ty: &str, res_ty: &str) -> (&'static str, &'static str) {
     let req_stream = req_ty.trim_start().starts_with("stream ");
     let res_stream = res_ty.trim_start().starts_with("stream ");
@@ -140,6 +156,31 @@ fn parse_grpc_methods(content: &str) -> Vec<GrpcMethodOption> {
     }
 
     methods
+}
+
+fn collect_proto_files(dir: &Path, out: &mut Vec<String>) -> Result<(), String> {
+    let entries = fs::read_dir(dir)
+        .map_err(|e| format!("Failed to read directory {}: {e}", dir.display()))?;
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read directory entry: {e}"))?;
+        let path = entry.path();
+        if path.is_dir() {
+            collect_proto_files(&path, out)?;
+            continue;
+        }
+
+        let is_proto = path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| ext.eq_ignore_ascii_case("proto"))
+            .unwrap_or(false);
+        if is_proto {
+            out.push(path.to_string_lossy().to_string());
+        }
+    }
+
+    Ok(())
 }
 
 fn get_state_path(app: &AppHandle) -> Result<PathBuf, String> {
