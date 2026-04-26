@@ -322,7 +322,7 @@ function SocketIoEventsPanel({
                     onClick={() => onSelectEvent(eventRow.id)}
                     className={cn(
                       "grid cursor-pointer grid-cols-[minmax(0,1.2fr)_132px_90px_88px_minmax(0,1fr)_44px] items-center gap-2 border-b border-border/15 bg-transparent px-3 py-2 transition-colors",
-                      isSelected ? "bg-white/[0.03]" : "hover:bg-transparent"
+                      "hover:bg-transparent"
                     )}
                   >
                     <Input
@@ -368,7 +368,7 @@ function SocketIoEventsPanel({
                       className={cn(
                         "h-8 border px-2 text-[11px] uppercase tracking-[0.12em]",
                         isSelected
-                          ? "border-primary/60 bg-primary/20 text-primary"
+                          ? "border-primary/60 bg-transparent text-primary"
                           : "border-border/30 bg-transparent text-muted-foreground hover:text-foreground"
                       )}
                     >
