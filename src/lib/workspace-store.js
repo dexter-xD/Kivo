@@ -76,6 +76,7 @@ function getRequestModeTemplate(mode) {
         method: "GET",
         bodyType: "json",
         activeEditorTab: "Body",
+        webSocketKeepAliveIntervalMs: 0,
         headers: withDefaultUserAgent([])
       };
     case REQUEST_MODES.SOCKET_IO:
@@ -177,6 +178,9 @@ export function createRequest(name = "New Request", mode = REQUEST_MODES.HTTP) {
     followRedirects: true,
     maxRedirects: 5,
     timeoutMs: 0,
+    webSocketKeepAliveIntervalMs: Number.isFinite(template.webSocketKeepAliveIntervalMs)
+      ? Number(template.webSocketKeepAliveIntervalMs)
+      : 0,
     sseWithCredentials: template.sseWithCredentials ?? false,
     sseLastEventId: template.sseLastEventId ?? "",
     sseRetryMs: Number.isFinite(template.sseRetryMs) ? Number(template.sseRetryMs) : 3000,
@@ -353,6 +357,9 @@ export function normalizeRequestRecord(request) {
     followRedirects: request?.followRedirects ?? true,
     maxRedirects: Number.isFinite(request?.maxRedirects) ? Number(request.maxRedirects) : 5,
     timeoutMs: Number.isFinite(request?.timeoutMs) ? Number(request.timeoutMs) : 0,
+    webSocketKeepAliveIntervalMs: Number.isFinite(request?.webSocketKeepAliveIntervalMs)
+      ? Number(request.webSocketKeepAliveIntervalMs)
+      : 0,
     sseWithCredentials: request?.sseWithCredentials ?? false,
     sseLastEventId: typeof request?.sseLastEventId === "string" ? request.sseLastEventId : "",
     sseRetryMs: Number.isFinite(request?.sseRetryMs) ? Number(request.sseRetryMs) : 3000,

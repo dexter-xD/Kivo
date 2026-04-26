@@ -267,6 +267,8 @@ export function useWorkspaceStore() {
   const resizeRef = useRef({ active: false, startX: 0, startWidth: 304 });
   const activeHttpRequestIdRef = useRef("");
   const wsConnectionsRef = useRef(new Map());
+  const wsKeepAliveTimersRef = useRef(new Map());
+  const wsConnectTimeoutsRef = useRef(new Map());
   const sseConnectionsRef = useRef(new Map());
   const socketIoConnectionsRef = useRef(new Map());
   const [wsStates, setWsStates] = useState({});
@@ -406,6 +408,10 @@ export function useWorkspaceStore() {
       }
     });
     wsConnectionsRef.current.clear();
+    wsKeepAliveTimersRef.current.forEach((timer) => clearInterval(timer));
+    wsKeepAliveTimersRef.current.clear();
+    wsConnectTimeoutsRef.current.forEach((timer) => clearTimeout(timer));
+    wsConnectTimeoutsRef.current.clear();
 
     sseConnectionsRef.current.forEach((source) => {
       try {
@@ -435,6 +441,20 @@ export function useWorkspaceStore() {
       sidebarCollapsed: false,
       sidebarWidth: clampSidebarWidth(Math.max(current.sidebarWidth, SIDEBAR_REOPEN_WIDTH))
     }));
+  }
+
+  function clearWebSocketRuntimeTimers(requestKey) {
+    const keepAliveTimer = wsKeepAliveTimersRef.current.get(requestKey);
+    if (keepAliveTimer) {
+      clearInterval(keepAliveTimer);
+      wsKeepAliveTimersRef.current.delete(requestKey);
+    }
+
+    const connectTimeout = wsConnectTimeoutsRef.current.get(requestKey);
+    if (connectTimeout) {
+      clearTimeout(connectTimeout);
+      wsConnectTimeoutsRef.current.delete(requestKey);
+    }
   }
 
   function updateActiveRequest(updater) {
@@ -528,6 +548,7 @@ export function useWorkspaceStore() {
       return;
     }
     if (existing) {
+      clearWebSocketRuntimeTimers(requestKey);
       try {
         existing.close();
       } catch {
@@ -553,8 +574,67 @@ export function useWorkspaceStore() {
     try {
       const socket = new WebSocket(finalUrl);
       wsConnectionsRef.current.set(requestKey, socket);
+      clearWebSocketRuntimeTimers(requestKey);
+
+      const timeoutMs = Number.isFinite(activeRequest.timeoutMs) ? Number(activeRequest.timeoutMs) : 0;
+      if (timeoutMs > 0) {
+        const timeoutId = setTimeout(() => {
+          if (socket.readyState !== WebSocket.CONNECTING) {
+            return;
+          }
+          clearWebSocketRuntimeTimers(requestKey);
+          try {
+            socket.close();
+          } catch {
+          }
+          wsConnectionsRef.current.delete(requestKey);
+          const detail = `WebSocket connection timed out after ${timeoutMs}ms.`;
+          updateWsState(requestKey, {
+            connecting: false,
+            connected: false,
+            error: detail,
+            lastEventAt: formatSavedAt()
+          });
+          setRequestLocalMessage(
+            workspaceName,
+            collectionName,
+            requestName,
+            requestMethod,
+            finalUrl,
+            detail,
+            "Connection error"
+          );
+        }, timeoutMs);
+        wsConnectTimeoutsRef.current.set(requestKey, timeoutId);
+      }
 
       socket.onopen = () => {
+        const connectTimeout = wsConnectTimeoutsRef.current.get(requestKey);
+        if (connectTimeout) {
+          clearTimeout(connectTimeout);
+          wsConnectTimeoutsRef.current.delete(requestKey);
+        }
+
+        const keepAliveIntervalMs = Number.isFinite(activeRequest.webSocketKeepAliveIntervalMs)
+          ? Number(activeRequest.webSocketKeepAliveIntervalMs)
+          : 0;
+        if (keepAliveIntervalMs > 0) {
+          const keepAliveId = setInterval(() => {
+            if (socket.readyState !== WebSocket.OPEN) {
+              return;
+            }
+            try {
+              socket.send("ping");
+              updateWsState(requestKey, {
+                error: "",
+                lastEventAt: formatSavedAt()
+              });
+            } catch {
+            }
+          }, keepAliveIntervalMs);
+          wsKeepAliveTimersRef.current.set(requestKey, keepAliveId);
+        }
+
         updateWsState(requestKey, {
           connecting: false,
           connected: true,
@@ -600,6 +680,7 @@ export function useWorkspaceStore() {
       };
 
       socket.onclose = (event) => {
+        clearWebSocketRuntimeTimers(requestKey);
         const wasTracked = wsConnectionsRef.current.has(requestKey);
         wsConnectionsRef.current.delete(requestKey);
         updateWsState(requestKey, {
@@ -649,6 +730,7 @@ export function useWorkspaceStore() {
     );
     const socket = wsConnectionsRef.current.get(requestKey);
     if (socket) {
+      clearWebSocketRuntimeTimers(requestKey);
       try {
         socket.close();
       } catch {

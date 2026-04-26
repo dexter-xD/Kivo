@@ -23,6 +23,50 @@ const webSocketBodyModes = [
   { value: "text", label: "Raw" }
 ];
 
+function WebSocketSettingsPanel({ state, onChange }) {
+  return (
+    <div className="h-full min-h-0 overflow-hidden text-[12px] text-muted-foreground">
+      <div className="h-full thin-scrollbar overflow-auto px-3 py-3">
+        <div className="grid max-w-[720px] gap-4">
+          <p className="text-[13px] text-muted-foreground">Configure WebSocket connection behavior for this request.</p>
+
+          <div className="grid gap-3 border border-border/30 bg-transparent p-3">
+            <div className="grid gap-2">
+              <label className="text-[10px] uppercase tracking-[0.18em]">Timeout (ms)</label>
+              <Input
+                type="text"
+                inputMode="numeric"
+                value={Number.isFinite(state.timeoutMs) ? String(state.timeoutMs) : "0"}
+                onChange={(event) => {
+                  const digitsOnly = event.target.value.replace(/[^0-9]/g, "");
+                  const value = Number.parseInt(digitsOnly, 10);
+                  onChange("timeoutMs", Number.isFinite(value) && value >= 0 ? value : 0);
+                }}
+                className="h-10 border-border/40 bg-transparent max-w-[220px]"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <label className="text-[10px] uppercase tracking-[0.18em]">Keep Alive Interval (ms)</label>
+              <Input
+                type="text"
+                inputMode="numeric"
+                value={Number.isFinite(state.webSocketKeepAliveIntervalMs) ? String(state.webSocketKeepAliveIntervalMs) : "0"}
+                onChange={(event) => {
+                  const digitsOnly = event.target.value.replace(/[^0-9]/g, "");
+                  const value = Number.parseInt(digitsOnly, 10);
+                  onChange("webSocketKeepAliveIntervalMs", Number.isFinite(value) && value >= 0 ? value : 0);
+                }}
+                className="h-10 border-border/40 bg-transparent max-w-[220px]"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function toWebSocketUrl(rawUrl) {
   const trimmed = String(rawUrl ?? "").trim();
   if (!trimmed) return "";
@@ -506,11 +550,12 @@ function RequestSettingsPanel({ state, onChange }) {
             <div className="grid gap-2">
               <label className="text-[10px] uppercase tracking-[0.18em]">Max Redirects</label>
               <Input
-                type="number"
-                min={0}
-                value={Number.isFinite(state.maxRedirects) ? state.maxRedirects : 5}
+                type="text"
+                inputMode="numeric"
+                value={Number.isFinite(state.maxRedirects) ? String(state.maxRedirects) : "5"}
                 onChange={(event) => {
-                  const value = Number.parseInt(event.target.value, 10);
+                  const digitsOnly = event.target.value.replace(/[^0-9]/g, "");
+                  const value = Number.parseInt(digitsOnly, 10);
                   onChange("maxRedirects", Number.isFinite(value) && value >= 0 ? value : 0);
                 }}
                 className="h-10 border-border/40 bg-transparent max-w-[180px]"
@@ -520,11 +565,12 @@ function RequestSettingsPanel({ state, onChange }) {
             <div className="grid gap-2">
               <label className="text-[10px] uppercase tracking-[0.18em]">Timeout (ms)</label>
               <Input
-                type="number"
-                min={0}
-                value={Number.isFinite(state.timeoutMs) ? state.timeoutMs : 0}
+                type="text"
+                inputMode="numeric"
+                value={Number.isFinite(state.timeoutMs) ? String(state.timeoutMs) : "0"}
                 onChange={(event) => {
-                  const value = Number.parseInt(event.target.value, 10);
+                  const digitsOnly = event.target.value.replace(/[^0-9]/g, "");
+                  const value = Number.parseInt(digitsOnly, 10);
                   onChange("timeoutMs", Number.isFinite(value) && value >= 0 ? value : 0);
                 }}
                 className="h-10 border-border/40 bg-transparent max-w-[180px]"
@@ -1316,7 +1362,7 @@ export function RequestPane({
   );
 
   const visibleTabs = isWebSocketRequest
-    ? ["Params", "Body", "Auth", "Headers", "Docs"]
+    ? ["Params", "Body", "Auth", "Headers", "Settings", "Docs"]
     : isSseRequest
       ? ["Params", "Body", "Auth", "Headers", "Docs"]
       : isSocketIoRequest
@@ -2193,7 +2239,9 @@ export function RequestPane({
         ) : null}
 
         {activeTab === "Settings" ? (
-          <RequestSettingsPanel state={state} onChange={onChange} />
+          isWebSocketRequest
+            ? <WebSocketSettingsPanel state={state} onChange={onChange} />
+            : <RequestSettingsPanel state={state} onChange={onChange} />
         ) : null}
       </div>
 
