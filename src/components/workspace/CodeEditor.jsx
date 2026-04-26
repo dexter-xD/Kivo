@@ -207,7 +207,7 @@ export function CodeEditor({
       <pre
         ref={highlightRef}
         aria-hidden="true"
-        className="pointer-events-none h-full overflow-auto px-4 py-3 font-mono text-[12px] leading-6 text-foreground"
+        className="editor-overlay-scroll-hidden pointer-events-none h-full overflow-auto px-4 py-3 font-mono text-[12px] leading-6 text-foreground"
       >
         <code>
           {displayValue

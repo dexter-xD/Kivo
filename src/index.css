@@ -299,6 +299,16 @@
     background: transparent;
   }
 
+  .editor-overlay-scroll-hidden {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .editor-overlay-scroll-hidden::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+
   /* macOS window drag region — makes the marked area draggable */
   [data-tauri-drag-region] {
     -webkit-app-region: drag;

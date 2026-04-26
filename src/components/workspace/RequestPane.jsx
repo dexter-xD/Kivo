@@ -1257,7 +1257,7 @@ export function RequestPane({
       <div className={cn(
         "grid gap-px border-b border-border/25 bg-transparent",
         isGrpcRequest
-          ? "grid-cols-[88px_minmax(0,1fr)_200px_34px_34px_92px] lg:grid-cols-[100px_minmax(0,1fr)_260px_40px_40px_108px]"
+          ? "grid-cols-[88px_minmax(0,1fr)_92px] xl:grid-cols-[100px_minmax(0,1fr)_260px_40px_40px_108px]"
           : "grid-cols-[108px_minmax(0,1fr)_92px] lg:grid-cols-[124px_minmax(0,1fr)_108px]"
       )}>
         {isWebSocketRequest ? (
@@ -1281,22 +1281,34 @@ export function RequestPane({
         />
 
         {isGrpcRequest ? (
+          <Button
+            className="h-8 gap-1.5 rounded-none px-2.5 text-[12px] xl:hidden"
+            onClick={onSend}
+            type="button"
+            disabled={isSending}
+          >
+            Start
+          </Button>
+        ) : null}
+
+        {isGrpcRequest ? (
           hasGrpcProtoSelected ? (
             <SelectMenu
               value={state.grpcMethodPath || ""}
               options={grpcMethodOptions.length > 0 ? grpcMethodOptions : [{ value: "", label: isGrpcMethodsLoading ? "Loading methods..." : "No methods found" }]}
               onChange={(methodPath) => onChange("grpcMethodPath", methodPath)}
+              className="hidden xl:block"
               buttonClassName="h-8 rounded-none border-0 bg-transparent text-[12px] lg:h-10 lg:text-[13px]"
             />
           ) : (
-            <div className="flex h-8 items-center border-0 bg-transparent px-3 text-[12px] text-muted-foreground lg:h-10 lg:text-[13px]">
+            <div className="hidden h-8 items-center border-0 bg-transparent px-3 text-[12px] text-muted-foreground xl:flex xl:h-10 xl:text-[13px]">
               Select method
             </div>
           )
         ) : null}
 
         {isGrpcRequest ? (
-          <div className="relative h-8 lg:h-10" onMouseEnter={() => setShowReflectionTooltip(true)} onMouseLeave={() => setShowReflectionTooltip(false)}>
+          <div className="relative hidden h-8 xl:block xl:h-10" onMouseEnter={() => setShowReflectionTooltip(true)} onMouseLeave={() => setShowReflectionTooltip(false)}>
             <Button
               type="button"
               variant="ghost"
@@ -1320,7 +1332,7 @@ export function RequestPane({
             type="button"
             variant="ghost"
             size="icon"
-            className="h-8 rounded-none text-muted-foreground lg:h-10"
+            className="hidden h-8 rounded-none text-muted-foreground xl:inline-flex xl:h-10"
             onClick={handleGrpcProtoBrowse}
           >
             <FileCode2 className="h-4 w-4" />
@@ -1328,7 +1340,10 @@ export function RequestPane({
         ) : null}
 
         <Button
-          className="h-8 gap-1.5 rounded-none px-2.5 text-[12px] lg:h-10 lg:text-[14px]"
+          className={cn(
+            "h-8 gap-1.5 rounded-none px-2.5 text-[12px] lg:h-10 lg:text-[14px]",
+            isGrpcRequest && "hidden xl:inline-flex"
+          )}
           onClick={isWebSocketRequest ? (activeWsState.connected || activeWsState.connecting ? onWebSocketDisconnect : onWebSocketConnect) : onSend}
           type="button"
           disabled={isWebSocketRequest ? false : isSending}
@@ -1337,6 +1352,51 @@ export function RequestPane({
           {isWebSocketRequest ? null : (isGrpcRequest ? "Start" : (isSending ? "Sending" : "Send"))}
         </Button>
       </div>
+
+      {isGrpcRequest ? (
+        <div className="grid grid-cols-[minmax(0,1fr)_34px_34px] gap-px border-b border-border/25 bg-transparent xl:hidden">
+          {hasGrpcProtoSelected ? (
+            <SelectMenu
+              value={state.grpcMethodPath || ""}
+              options={grpcMethodOptions.length > 0 ? grpcMethodOptions : [{ value: "", label: isGrpcMethodsLoading ? "Loading methods..." : "No methods found" }]}
+              onChange={(methodPath) => onChange("grpcMethodPath", methodPath)}
+              buttonClassName="h-8 rounded-none border-0 bg-transparent text-[12px]"
+            />
+          ) : (
+            <div className="flex h-8 items-center border-0 bg-transparent px-3 text-[12px] text-muted-foreground">
+              Select method
+            </div>
+          )}
+
+          <div className="relative h-8" onMouseEnter={() => setShowReflectionTooltip(true)} onMouseLeave={() => setShowReflectionTooltip(false)}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 rounded-none text-muted-foreground"
+              disabled={!hasValidGrpcUrl}
+              onClick={handleGrpcReflectionRefresh}
+            >
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+            {showReflectionTooltip && hasValidGrpcUrl ? (
+              <div className="pointer-events-none absolute left-1/2 top-[calc(100%+6px)] z-30 -translate-x-1/2 whitespace-nowrap border border-border/40 bg-popover px-2 py-1 text-[11px] text-foreground shadow-lg">
+                Click to use server reflection
+              </div>
+            ) : null}
+          </div>
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 rounded-none text-muted-foreground"
+            onClick={handleGrpcProtoBrowse}
+          >
+            <FileCode2 className="h-4 w-4" />
+          </Button>
+        </div>
+      ) : null}
 
       {isGrpcRequest ? (
         <div className="flex items-center justify-between border-b border-border/20 bg-transparent px-3 py-2 text-[11px] text-muted-foreground">
