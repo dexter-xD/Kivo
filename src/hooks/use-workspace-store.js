@@ -36,6 +36,47 @@ function normalizeFolderPath(path) {
     .join("/");
 }
 
+function buildSseUrl(rawUrl, queryParams = []) {
+  const trimmed = String(rawUrl ?? "").trim();
+  if (!trimmed) return "";
+
+  let normalized = trimmed;
+  if (!/^https?:\/\//i.test(normalized)) {
+    normalized = `https://${normalized}`;
+  }
+
+  try {
+    const parsed = new URL(normalized);
+    queryParams.forEach((row) => {
+      if (row?.enabled && String(row.key || "").trim()) {
+        parsed.searchParams.append(String(row.key).trim(), String(row.value || ""));
+      }
+    });
+    return parsed.toString();
+  } catch {
+    return normalized;
+  }
+}
+
+function buildSocketIoWebSocketUrl(rawUrl, queryParams = []) {
+  const baseUrl = buildWebSocketUrl(rawUrl, queryParams);
+  if (!baseUrl) return "";
+
+  try {
+    const parsed = new URL(baseUrl);
+    if (!parsed.pathname || parsed.pathname === "/") {
+      parsed.pathname = "/socket.io/";
+    }
+    if (!parsed.searchParams.has("EIO")) {
+      parsed.searchParams.set("EIO", "4");
+    }
+    parsed.searchParams.set("transport", "websocket");
+    return parsed.toString();
+  } catch {
+    return baseUrl;
+  }
+}
+
 function getFolderAncestors(folderPath) {
   const normalized = normalizeFolderPath(folderPath);
   if (!normalized) return [];
@@ -197,6 +238,8 @@ export function useWorkspaceStore() {
   const resizeRef = useRef({ active: false, startX: 0, startWidth: 304 });
   const activeHttpRequestIdRef = useRef("");
   const wsConnectionsRef = useRef(new Map());
+  const sseConnectionsRef = useRef(new Map());
+  const socketIoConnectionsRef = useRef(new Map());
   const [wsStates, setWsStates] = useState({});
 
   useEffect(() => {
@@ -334,6 +377,22 @@ export function useWorkspaceStore() {
       }
     });
     wsConnectionsRef.current.clear();
+
+    sseConnectionsRef.current.forEach((source) => {
+      try {
+        source.close();
+      } catch {
+      }
+    });
+    sseConnectionsRef.current.clear();
+
+    socketIoConnectionsRef.current.forEach((socket) => {
+      try {
+        socket.close();
+      } catch {
+      }
+    });
+    socketIoConnectionsRef.current.clear();
   }, []);
 
   function updateStore(updater) {
@@ -400,7 +459,7 @@ export function useWorkspaceStore() {
     }));
   }
 
-  function setRequestLocalMessage(workspaceName, collectionName, requestName, method, url, text, statusText = "WebSocket") {
+  function setRequestLocalMessage(workspaceName, collectionName, requestName, method, url, text, statusText = "Realtime") {
     const savedAt = formatSavedAt();
     updateStore((current) => updateRequestWithLocalResponseByIdentity(current, workspaceName, collectionName, requestName, {
       status: 0,
@@ -576,7 +635,14 @@ export function useWorkspaceStore() {
   }
 
   function sendActiveWebSocketMessage() {
-    if (!activeRequest || activeRequest.requestMode !== REQUEST_MODES.WEBSOCKET) return;
+    if (!activeRequest) return;
+
+    if (activeRequest.requestMode === REQUEST_MODES.SOCKET_IO) {
+      sendActiveSocketIoMessage();
+      return;
+    }
+
+    if (activeRequest.requestMode !== REQUEST_MODES.WEBSOCKET) return;
     const workspaceName = activeWorkspace?.name ?? "";
     const collectionName = activeCollection?.name ?? "";
     const requestName = activeRequest.name;
@@ -615,6 +681,306 @@ export function useWorkspaceStore() {
     } catch {
       updateWsState(requestKey, { error: "Failed to send WebSocket message" });
       setRequestLocalMessage(workspaceName, collectionName, requestName, requestMethod, activeRequest.url, "Failed to send WebSocket message.", "Send failed");
+    }
+  }
+
+  function connectActiveSse() {
+    if (!activeRequest || activeRequest.requestMode !== REQUEST_MODES.SSE) return;
+
+    const workspaceName = activeWorkspace?.name ?? "";
+    const collectionName = activeCollection?.name ?? "";
+    const requestName = activeRequest.name;
+    const requestMethod = activeRequest.method;
+    const requestKey = buildRequestKey(workspaceName, collectionName, requestName);
+
+    const existing = sseConnectionsRef.current.get(requestKey);
+    if (existing) {
+      try {
+        existing.close();
+      } catch {
+      }
+      sseConnectionsRef.current.delete(requestKey);
+    }
+
+    const finalUrl = buildSseUrl(activeRequest.url, activeRequest.queryParams);
+    if (!finalUrl) {
+      updateWsState(requestKey, { connected: false, connecting: false, error: "Enter a valid SSE URL." });
+      setRequestLocalMessage(workspaceName, collectionName, requestName, requestMethod, activeRequest.url, "Enter a valid SSE URL before connecting.", "Connection error");
+      return;
+    }
+
+    updateWsState(requestKey, { connecting: true, connected: false, error: "" });
+
+    try {
+      const source = new EventSource(finalUrl, {
+        withCredentials: Boolean(activeRequest.sseWithCredentials)
+      });
+      sseConnectionsRef.current.set(requestKey, source);
+
+      source.onopen = () => {
+        updateWsState(requestKey, {
+          connecting: false,
+          connected: true,
+          error: "",
+          lastEventAt: formatSavedAt()
+        });
+        setRequestLocalMessage(workspaceName, collectionName, requestName, requestMethod, finalUrl, `Connected to SSE stream at ${finalUrl}`, "Connected");
+      };
+
+      source.onmessage = (event) => {
+        const message = String(event?.data ?? "");
+        setWsStates((current) => ({
+          ...current,
+          [requestKey]: {
+            connected: true,
+            connecting: false,
+            messageCount: (current[requestKey]?.messageCount ?? 0) + 1,
+            lastMessage: message,
+            lastEventAt: formatSavedAt(),
+            error: ""
+          }
+        }));
+        setRequestLocalMessage(workspaceName, collectionName, requestName, requestMethod, finalUrl, message, "Event received");
+      };
+
+      source.onerror = () => {
+        updateWsState(requestKey, {
+          connecting: false,
+          connected: false,
+          error: `SSE stream error from ${finalUrl}`,
+          lastEventAt: formatSavedAt()
+        });
+        setRequestLocalMessage(workspaceName, collectionName, requestName, requestMethod, finalUrl, `SSE stream error from ${finalUrl}`, "Connection error");
+      };
+    } catch {
+      updateWsState(requestKey, {
+        connecting: false,
+        connected: false,
+        error: "Failed to create SSE connection"
+      });
+      setRequestLocalMessage(workspaceName, collectionName, requestName, requestMethod, activeRequest.url, "Failed to create SSE connection.", "Connection error");
+    }
+  }
+
+  function disconnectActiveSse() {
+    if (!activeRequest || activeRequest.requestMode !== REQUEST_MODES.SSE) return;
+    const workspaceName = activeWorkspace?.name ?? "";
+    const collectionName = activeCollection?.name ?? "";
+    const requestName = activeRequest.name;
+    const requestMethod = activeRequest.method;
+    const requestKey = buildRequestKey(workspaceName, collectionName, requestName);
+
+    const source = sseConnectionsRef.current.get(requestKey);
+    if (source) {
+      try {
+        source.close();
+      } catch {
+      }
+      sseConnectionsRef.current.delete(requestKey);
+    }
+
+    updateWsState(requestKey, {
+      connected: false,
+      connecting: false,
+      lastEventAt: formatSavedAt()
+    });
+    setRequestLocalMessage(workspaceName, collectionName, requestName, requestMethod, activeRequest.url, "Disconnected from SSE stream.", "Disconnected");
+  }
+
+  function connectActiveSocketIo() {
+    if (!activeRequest || activeRequest.requestMode !== REQUEST_MODES.SOCKET_IO) return;
+
+    const workspaceName = activeWorkspace?.name ?? "";
+    const collectionName = activeCollection?.name ?? "";
+    const requestName = activeRequest.name;
+    const requestMethod = activeRequest.method;
+    const requestKey = buildRequestKey(workspaceName, collectionName, requestName);
+
+    const existing = socketIoConnectionsRef.current.get(requestKey);
+    if (existing && existing.readyState === WebSocket.OPEN) {
+      return;
+    }
+    if (existing) {
+      try {
+        existing.close();
+      } catch {
+      }
+      socketIoConnectionsRef.current.delete(requestKey);
+    }
+
+    const finalUrl = buildSocketIoWebSocketUrl(activeRequest.url, activeRequest.queryParams);
+    const namespace = String(activeRequest.socketIoNamespace || "/").trim() || "/";
+    const normalizedNamespace = namespace.startsWith("/") ? namespace : `/${namespace}`;
+    if (!finalUrl) {
+      updateWsState(requestKey, { connected: false, connecting: false, error: "Enter a valid Socket.IO URL." });
+      setRequestLocalMessage(workspaceName, collectionName, requestName, requestMethod, activeRequest.url, "Enter a valid Socket.IO URL before connecting.", "Connection error");
+      return;
+    }
+
+    updateWsState(requestKey, { connecting: true, connected: false, error: "" });
+
+    try {
+      const socket = new WebSocket(finalUrl);
+      socketIoConnectionsRef.current.set(requestKey, socket);
+
+      socket.onopen = () => {
+        try {
+          const connectPacket = normalizedNamespace === "/" ? "40" : `40${normalizedNamespace},`;
+          socket.send(connectPacket);
+        } catch {
+        }
+        updateWsState(requestKey, {
+          connecting: false,
+          connected: true,
+          error: "",
+          lastEventAt: formatSavedAt()
+        });
+        setRequestLocalMessage(workspaceName, collectionName, requestName, requestMethod, finalUrl, `Connected to Socket.IO endpoint ${finalUrl}`, "Connected");
+      };
+
+      socket.onmessage = (event) => {
+        const message = String(event?.data ?? "");
+        if (message === "2") {
+          try {
+            socket.send("3");
+          } catch {
+          }
+        }
+
+        let display = message;
+        if (message.startsWith("42")) {
+          const payload = message.slice(2);
+          try {
+            const parsed = JSON.parse(payload);
+            display = JSON.stringify(parsed, null, 2);
+          } catch {
+          }
+        }
+
+        setWsStates((current) => ({
+          ...current,
+          [requestKey]: {
+            connected: true,
+            connecting: false,
+            messageCount: (current[requestKey]?.messageCount ?? 0) + 1,
+            lastMessage: display,
+            lastEventAt: formatSavedAt(),
+            error: ""
+          }
+        }));
+        setRequestLocalMessage(workspaceName, collectionName, requestName, requestMethod, finalUrl, display, "Event received");
+      };
+
+      socket.onerror = () => {
+        const detail = `Failed to connect to Socket.IO at ${finalUrl}. Verify server and transport settings.`;
+        updateWsState(requestKey, {
+          connecting: false,
+          connected: false,
+          error: detail,
+          lastEventAt: formatSavedAt()
+        });
+        setRequestLocalMessage(workspaceName, collectionName, requestName, requestMethod, finalUrl, detail, "Connection error");
+      };
+
+      socket.onclose = (event) => {
+        const wasTracked = socketIoConnectionsRef.current.has(requestKey);
+        socketIoConnectionsRef.current.delete(requestKey);
+        updateWsState(requestKey, {
+          connecting: false,
+          connected: false,
+          lastEventAt: formatSavedAt()
+        });
+
+        const code = Number(event?.code || 0);
+        const reason = String(event?.reason || "").trim();
+        const abnormal = code !== 0 && code !== 1000 && code !== 1001;
+        if (wasTracked && abnormal) {
+          const detail = reason
+            ? `Socket.IO closed (${code}): ${reason}`
+            : `Socket.IO closed (${code}). Verify server at ${finalUrl}.`;
+          setRequestLocalMessage(workspaceName, collectionName, requestName, requestMethod, finalUrl, detail, "Connection error");
+        }
+      };
+    } catch {
+      updateWsState(requestKey, {
+        connecting: false,
+        connected: false,
+        error: "Failed to create Socket.IO connection"
+      });
+      setRequestLocalMessage(workspaceName, collectionName, requestName, requestMethod, activeRequest.url, "Failed to create Socket.IO connection.", "Connection error");
+    }
+  }
+
+  function disconnectActiveSocketIo() {
+    if (!activeRequest || activeRequest.requestMode !== REQUEST_MODES.SOCKET_IO) return;
+    const workspaceName = activeWorkspace?.name ?? "";
+    const collectionName = activeCollection?.name ?? "";
+    const requestName = activeRequest.name;
+    const requestMethod = activeRequest.method;
+    const requestKey = buildRequestKey(workspaceName, collectionName, requestName);
+
+    const socket = socketIoConnectionsRef.current.get(requestKey);
+    if (socket) {
+      try {
+        socket.close();
+      } catch {
+      }
+      socketIoConnectionsRef.current.delete(requestKey);
+    }
+    updateWsState(requestKey, {
+      connected: false,
+      connecting: false,
+      lastEventAt: formatSavedAt()
+    });
+    setRequestLocalMessage(workspaceName, collectionName, requestName, requestMethod, activeRequest.url, "Disconnected from Socket.IO.", "Disconnected");
+  }
+
+  function sendActiveSocketIoMessage() {
+    if (!activeRequest || activeRequest.requestMode !== REQUEST_MODES.SOCKET_IO) return;
+    const workspaceName = activeWorkspace?.name ?? "";
+    const collectionName = activeCollection?.name ?? "";
+    const requestName = activeRequest.name;
+    const requestMethod = activeRequest.method;
+    const requestKey = buildRequestKey(workspaceName, collectionName, requestName);
+    const socket = socketIoConnectionsRef.current.get(requestKey);
+
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      updateWsState(requestKey, { error: "Connect first before sending a Socket.IO event." });
+      setRequestLocalMessage(workspaceName, collectionName, requestName, requestMethod, activeRequest.url, "Connect first before sending a Socket.IO event.", "Send blocked");
+      return;
+    }
+
+    const eventName = String(activeRequest.socketIoEventName || "message").trim() || "message";
+    const namespace = String(activeRequest.socketIoNamespace || "/").trim() || "/";
+    const normalizedNamespace = namespace.startsWith("/") ? namespace : `/${namespace}`;
+    let payload = String(activeRequest.body ?? "");
+
+    if (activeRequest.bodyType === "json") {
+      try {
+        payload = JSON.stringify(JSON.parse(payload));
+      } catch {
+        updateWsState(requestKey, { error: "Invalid JSON payload" });
+        setRequestLocalMessage(workspaceName, collectionName, requestName, requestMethod, activeRequest.url, "Invalid JSON payload.", "Send blocked");
+        return;
+      }
+    }
+
+    const normalizedPayload = activeRequest.bodyType === "json"
+      ? JSON.parse(payload)
+      : payload;
+    const packetPrefix = normalizedNamespace === "/" ? "42" : `42${normalizedNamespace},`;
+    const packet = `${packetPrefix}${JSON.stringify([eventName, normalizedPayload])}`;
+
+    try {
+      socket.send(packet);
+      updateWsState(requestKey, {
+        error: "",
+        lastEventAt: formatSavedAt()
+      });
+      setRequestLocalMessage(workspaceName, collectionName, requestName, requestMethod, activeRequest.url, JSON.stringify([eventName, normalizedPayload], null, 2), "Event sent");
+    } catch {
+      updateWsState(requestKey, { error: "Failed to send Socket.IO event" });
+      setRequestLocalMessage(workspaceName, collectionName, requestName, requestMethod, activeRequest.url, "Failed to send Socket.IO event.", "Send failed");
     }
   }
 
@@ -1513,26 +1879,32 @@ export function useWorkspaceStore() {
     }
 
     if (activeRequest.requestMode === REQUEST_MODES.SOCKET_IO) {
-      const savedAt = formatSavedAt();
-      const message = "Socket.IO send is not available yet. You can still create and configure Socket.IO requests now.";
+      const requestKey = buildRequestKey(
+        activeWorkspace?.name ?? "",
+        activeCollection?.name ?? "",
+        activeRequest.name
+      );
+      const wsState = wsStates[requestKey] ?? { connected: false, connecting: false };
+      if (wsState.connected || wsState.connecting) {
+        disconnectActiveSocketIo();
+      } else {
+        connectActiveSocketIo();
+      }
+      return;
+    }
 
-      updateStore((current) => updateRequestWithLocalResponse(current, activeRequest.name, {
-        status: 0,
-        badge: "Not supported yet",
-        statusText: "Not supported yet",
-        duration: "-",
-        size: "0 B",
-        headers: {},
-        cookies: [],
-        body: message,
-        rawBody: message,
-        isJson: false,
-        meta: {
-          url: activeRequest.url || "-",
-          method: activeRequest.method
-        },
-        savedAt
-      }));
+    if (activeRequest.requestMode === REQUEST_MODES.SSE) {
+      const requestKey = buildRequestKey(
+        activeWorkspace?.name ?? "",
+        activeCollection?.name ?? "",
+        activeRequest.name
+      );
+      const wsState = wsStates[requestKey] ?? { connected: false, connecting: false };
+      if (wsState.connected || wsState.connecting) {
+        disconnectActiveSse();
+      } else {
+        connectActiveSse();
+      }
       return;
     }
 

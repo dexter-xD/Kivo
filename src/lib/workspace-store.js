@@ -32,6 +32,10 @@ function getRequestModeTemplate(mode) {
       return {
         method: "GET",
         bodyType: "none",
+        activeEditorTab: "Params",
+        sseWithCredentials: false,
+        sseLastEventId: "",
+        sseRetryMs: 3000,
         headers: [{ key: "Accept", value: "text/event-stream", enabled: true }]
       };
     case REQUEST_MODES.GRPC:
@@ -50,7 +54,12 @@ function getRequestModeTemplate(mode) {
     case REQUEST_MODES.SOCKET_IO:
       return {
         method: "GET",
-        bodyType: "none"
+        bodyType: "json",
+        body: "{\n\n}",
+        activeEditorTab: "Body",
+        socketIoEventName: "message",
+        socketIoNamespace: "/",
+        socketIoAckTimeoutMs: 0
       };
     case REQUEST_MODES.HTTP:
     default:

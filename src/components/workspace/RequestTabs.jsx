@@ -18,6 +18,8 @@ export function RequestTabs({
       {requestTabs.map((request) => (
         (() => {
           const isWebSocket = request.requestMode === REQUEST_MODES.WEBSOCKET;
+          const isSse = request.requestMode === REQUEST_MODES.SSE;
+          const isSocketIo = request.requestMode === REQUEST_MODES.SOCKET_IO;
           const isGraphql = request.requestMode === REQUEST_MODES.GRAPHQL
             || request.bodyType === "graphql";
           const isGrpc = request.requestMode === REQUEST_MODES.GRPC
@@ -27,12 +29,16 @@ export function RequestTabs({
 
           const displayMethod = isWebSocket
             ? "WS"
-            : (isGrpc ? "gRPC" : (isGraphql ? "GQL" : request.method));
+            : (isSse ? "SSE" : (isSocketIo ? "SIO" : (isGrpc ? "gRPC" : (isGraphql ? "GQL" : request.method))));
           const methodTone = isWebSocket
             ? "text-amber-300 bg-amber-500/15"
-            : (isGrpc
+            : (isSse
+              ? "text-emerald-300 bg-emerald-500/15"
+              : (isSocketIo
+                ? "text-orange-300 bg-orange-500/15"
+                : (isGrpc
               ? "text-cyan-300 bg-cyan-500/15"
-              : (isGraphql ? "text-fuchsia-300 bg-fuchsia-500/15" : getMethodTone(request.method)));
+              : (isGraphql ? "text-fuchsia-300 bg-fuchsia-500/15" : getMethodTone(request.method)))));
           return (
             <button
               key={request.name}

@@ -21,6 +21,172 @@ const webSocketBodyModes = [
   { value: "json", label: "JSON" },
   { value: "text", label: "Raw" }
 ];
+
+function SseHeadersPanel({ headers, onHeadersChange }) {
+  const systemHeaders = [
+    { key: "Accept", value: "text/event-stream" },
+    { key: "Cache-Control", value: "no-cache" }
+  ];
+
+  return (
+    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
+      <div className="border-b border-border/20 px-3 py-2 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+        Stream Headers
+      </div>
+      <div className="thin-scrollbar min-h-0 overflow-auto bg-transparent">
+        {systemHeaders.map((row) => (
+          <div key={row.key} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] border-b border-border/10 px-3 py-2 text-[12px]">
+            <div className="text-foreground">{row.key}</div>
+            <div className="text-muted-foreground">{row.value}</div>
+          </div>
+        ))}
+        <div className="border-t border-border/20">
+          <TableEditor
+            rows={headers}
+            onChange={onHeadersChange}
+            keyLabel="header"
+            valueLabel="value"
+            title="Custom Headers"
+            addLabel="Add"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SocketIoHeadersPanel({ headers, onHeadersChange }) {
+  const systemHeaders = [
+    { key: "Connection", value: "Upgrade" },
+    { key: "Upgrade", value: "websocket" },
+    { key: "Sec-WebSocket-Version", value: "13" }
+  ];
+
+  return (
+    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
+      <div className="border-b border-border/20 px-3 py-2 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+        Socket.IO Handshake Headers
+      </div>
+      <div className="thin-scrollbar min-h-0 overflow-auto bg-transparent">
+        {systemHeaders.map((row) => (
+          <div key={row.key} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] border-b border-border/10 px-3 py-2 text-[12px]">
+            <div className="text-foreground">{row.key}</div>
+            <div className="text-muted-foreground">{row.value}</div>
+          </div>
+        ))}
+        <div className="border-t border-border/20">
+          <TableEditor
+            rows={headers}
+            onChange={onHeadersChange}
+            keyLabel="header"
+            valueLabel="value"
+            title="Custom Headers"
+            addLabel="Add"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SseOptionsPanel({ state, onChange }) {
+  return (
+    <div className="h-full min-h-0 overflow-hidden text-[12px] text-muted-foreground">
+      <div className="h-full thin-scrollbar overflow-auto px-3 py-3">
+        <div className="grid max-w-[640px] gap-4">
+          <div className="grid gap-2 border border-border/30 bg-transparent p-3">
+            <div className="text-[12px] font-medium text-foreground">Event Stream Options</div>
+            <p className="text-[11px] text-muted-foreground">These options are saved with your SSE request settings.</p>
+          </div>
+
+          <div className="grid gap-2">
+            <label className="text-[10px] uppercase tracking-[0.18em]">Retry (ms)</label>
+            <Input
+              type="number"
+              min={0}
+              value={Number.isFinite(state.sseRetryMs) ? state.sseRetryMs : 3000}
+              onChange={(event) => {
+                const value = Number.parseInt(event.target.value, 10);
+                onChange("sseRetryMs", Number.isFinite(value) && value >= 0 ? value : 0);
+              }}
+              className="h-10 max-w-[220px] border-border/40 bg-transparent"
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <label className="text-[10px] uppercase tracking-[0.18em]">Last Event ID</label>
+            <Input
+              value={state.sseLastEventId ?? ""}
+              onChange={(event) => onChange("sseLastEventId", event.target.value)}
+              placeholder="Optional resume token"
+              className="h-10 max-w-[420px] border-border/40 bg-transparent"
+            />
+          </div>
+
+          <label className="flex items-center gap-2 text-[12px] text-foreground">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-primary"
+              checked={Boolean(state.sseWithCredentials)}
+              onChange={(event) => onChange("sseWithCredentials", event.target.checked)}
+            />
+            Send credentials with EventSource (if server supports CORS credentials)
+          </label>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SocketIoEventsPanel({ state, onChange }) {
+  return (
+    <div className="h-full min-h-0 overflow-hidden text-[12px] text-muted-foreground">
+      <div className="h-full thin-scrollbar overflow-auto px-3 py-3">
+        <div className="grid max-w-[640px] gap-4">
+          <div className="grid gap-2 border border-border/30 bg-transparent p-3">
+            <div className="text-[12px] font-medium text-foreground">Socket.IO Event Settings</div>
+            <p className="text-[11px] text-muted-foreground">Configure event name and namespace used for outgoing packets.</p>
+          </div>
+
+          <div className="grid gap-2">
+            <label className="text-[10px] uppercase tracking-[0.18em]">Event Name</label>
+            <Input
+              value={state.socketIoEventName ?? "message"}
+              onChange={(event) => onChange("socketIoEventName", event.target.value)}
+              placeholder="message"
+              className="h-10 max-w-[320px] border-border/40 bg-transparent"
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <label className="text-[10px] uppercase tracking-[0.18em]">Namespace</label>
+            <Input
+              value={state.socketIoNamespace ?? "/"}
+              onChange={(event) => onChange("socketIoNamespace", event.target.value)}
+              placeholder="/"
+              className="h-10 max-w-[320px] border-border/40 bg-transparent"
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <label className="text-[10px] uppercase tracking-[0.18em]">Ack Timeout (ms)</label>
+            <Input
+              type="number"
+              min={0}
+              value={Number.isFinite(state.socketIoAckTimeoutMs) ? state.socketIoAckTimeoutMs : 0}
+              onChange={(event) => {
+                const value = Number.parseInt(event.target.value, 10);
+                onChange("socketIoAckTimeoutMs", Number.isFinite(value) && value >= 0 ? value : 0);
+              }}
+              className="h-10 max-w-[220px] border-border/40 bg-transparent"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const grpcStreamingModes = [
   { value: "unary", label: "Unary" },
   { value: "server_stream", label: "Server Streaming" },
@@ -878,6 +1044,9 @@ export function RequestPane({
   collectionName,
 }) {
   const isWebSocketRequest = state.requestMode === REQUEST_MODES.WEBSOCKET;
+  const isSseRequest = state.requestMode === REQUEST_MODES.SSE;
+  const isSocketIoRequest = state.requestMode === REQUEST_MODES.SOCKET_IO;
+  const isRealtimeRequest = isWebSocketRequest || isSseRequest || isSocketIoRequest;
   const isGrpcRequest = state.requestMode === REQUEST_MODES.GRPC;
   const hasGrpcProtoSelected = Boolean(String(state.grpcProtoFilePath || "").trim());
   const [grpcMethods, setGrpcMethods] = useState([]);
@@ -921,11 +1090,15 @@ export function RequestPane({
 
   const visibleTabs = isWebSocketRequest
     ? ["Params", "Body", "Auth", "Headers", "Docs"]
+    : isSseRequest
+      ? ["Params", "Body", "Auth", "Headers", "Docs"]
+      : isSocketIoRequest
+        ? ["Params", "Body", "Events", "Auth", "Headers", "Docs"]
     : isGrpcRequest
       ? [...(hasGrpcMethodSelected ? ["Body"] : []), "Headers", "Docs"]
       : tabs;
   const activeTab = state.activeEditorTab ?? "Params";
-  const bodyDisabled = !isWebSocketRequest && !isGrpcRequest && (state.method === "GET" || state.method === "DELETE" || state.bodyType === "none");
+  const bodyDisabled = !isRealtimeRequest && !isGrpcRequest && (state.method === "GET" || state.method === "DELETE" || state.bodyType === "none");
   const isJsonBody = state.bodyType === "json";
   const isGraphqlBody = state.bodyType === "graphql";
   const isTableBody = state.bodyType === "form-data" || state.bodyType === "form-urlencoded";
@@ -969,6 +1142,26 @@ export function RequestPane({
       onChange("bodyType", "json");
     }
   }, [activeTab, isWebSocketRequest, onChange, onTabChange, state.bodyType, visibleTabs]);
+
+  useEffect(() => {
+    if (!isSocketIoRequest) return;
+    if (!visibleTabs.includes(activeTab)) {
+      onTabChange("Body");
+    }
+    if (state.bodyType !== "json" && state.bodyType !== "text") {
+      onChange("bodyType", "json");
+    }
+  }, [activeTab, isSocketIoRequest, onChange, onTabChange, state.bodyType, visibleTabs]);
+
+  useEffect(() => {
+    if (!isSseRequest) return;
+    if (!visibleTabs.includes(activeTab)) {
+      onTabChange("Params");
+    }
+    if (state.bodyType !== "none") {
+      onChange("bodyType", "none");
+    }
+  }, [activeTab, isSseRequest, onChange, onTabChange, state.bodyType, visibleTabs]);
 
   useEffect(() => {
     if (!isGrpcRequest) return;
@@ -1264,6 +1457,10 @@ export function RequestPane({
           <div className="flex h-8 items-center px-3 lg:h-10">
             <span className="font-semibold uppercase tracking-[0.14em] text-amber-300">WS</span>
           </div>
+        ) : isSocketIoRequest ? (
+          <div className="flex h-8 items-center px-3 lg:h-10">
+            <span className="font-semibold uppercase tracking-[0.14em] text-orange-300">Socket.IO</span>
+          </div>
         ) : isGrpcRequest ? (
           <div className="flex h-8 items-center px-3 lg:h-10">
             <span className="font-semibold uppercase tracking-[0.14em] text-cyan-300">gRPC</span>
@@ -1276,7 +1473,7 @@ export function RequestPane({
           inputClassName="h-8 rounded-none border-0 bg-transparent text-[12.5px] lg:h-10 lg:text-[14px]"
           value={state.url}
           onValueChange={(val) => onChange("url", val)}
-          placeholder={isWebSocketRequest ? "wss://example.com/chat" : isGrpcRequest ? "grpcb.in:9000" : "https://api.example.com/v1/users"}
+          placeholder={isWebSocketRequest ? "wss://example.com/chat" : isSocketIoRequest ? "ws://example.com/socket.io/?EIO=4&transport=websocket" : isGrpcRequest ? "grpcb.in:9000" : isSseRequest ? "https://example.com/events" : "https://api.example.com/v1/users"}
           envVars={envVars}
         />
 
@@ -1344,12 +1541,12 @@ export function RequestPane({
             "h-8 gap-1.5 rounded-none px-2.5 text-[12px] lg:h-10 lg:text-[14px]",
             isGrpcRequest && "hidden xl:inline-flex"
           )}
-          onClick={isWebSocketRequest ? (activeWsState.connected || activeWsState.connecting ? onWebSocketDisconnect : onWebSocketConnect) : onSend}
+          onClick={onSend}
           type="button"
-          disabled={isWebSocketRequest ? false : isSending}
+          disabled={isRealtimeRequest ? false : isSending}
         >
-          {isWebSocketRequest ? (activeWsState.connecting ? "Connecting..." : (activeWsState.connected ? "Disconnect" : "Connect")) : isGrpcRequest ? null : <SendHorizontal className="h-3 w-3 lg:h-4 lg:w-4" />}
-          {isWebSocketRequest ? null : (isGrpcRequest ? "Start" : (isSending ? "Sending" : "Send"))}
+          {isRealtimeRequest ? (activeWsState.connecting ? "Connecting..." : (activeWsState.connected ? "Disconnect" : "Connect")) : isGrpcRequest ? null : <SendHorizontal className="h-3 w-3 lg:h-4 lg:w-4" />}
+          {isRealtimeRequest ? null : (isGrpcRequest ? "Start" : (isSending ? "Sending" : "Send"))}
         </Button>
       </div>
 
@@ -1416,7 +1613,7 @@ export function RequestPane({
         </div>
       ) : null}
 
-      {isWebSocketRequest && activeWsState.error ? (
+      {isRealtimeRequest && activeWsState.error ? (
         <div className="flex items-center gap-2 border-b border-amber-500/20 bg-amber-500/[0.08] px-3 py-1.5 text-[11px] text-amber-500 dark:text-amber-400">
           <span>{activeWsState.error}</span>
         </div>
@@ -1461,6 +1658,10 @@ export function RequestPane({
         {activeTab === "Headers" ? (
           isWebSocketRequest ? (
             <WebSocketHeadersPanel headers={state.headers} onHeadersChange={onHeadersChange} />
+          ) : isSseRequest ? (
+            <SseHeadersPanel headers={state.headers} onHeadersChange={onHeadersChange} />
+          ) : isSocketIoRequest ? (
+            <SocketIoHeadersPanel headers={state.headers} onHeadersChange={onHeadersChange} />
           ) : isGrpcRequest ? (
             <GrpcHeadersPanel headers={state.headers} onHeadersChange={onHeadersChange} />
           ) : (
@@ -1480,6 +1681,9 @@ export function RequestPane({
         ) : null}
 
         {activeTab === "Body" ? (
+          isSseRequest ? (
+            <SseOptionsPanel state={state} onChange={onChange} />
+          ) :
           isGrpcRequest && hasGrpcMethodSelected ? (
             <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
               <div className="flex items-center justify-between gap-3 border-b border-border/20 px-3 py-2 text-[11px] text-muted-foreground">
@@ -1505,16 +1709,16 @@ export function RequestPane({
               <div className="flex items-center gap-2">
                 <SelectMenu
                   value={state.bodyType}
-                  options={isWebSocketRequest ? webSocketBodyModes : requestBodyModes}
+                  options={(isWebSocketRequest || isSocketIoRequest) ? webSocketBodyModes : requestBodyModes}
                   onChange={handleBodyTypeChange}
                   className="min-w-[180px]"
                 />
                 <div className="flex items-center gap-1 border border-border/25 bg-transparent px-2.5 py-1.5 uppercase tracking-[0.14em]">
                   <Braces className="h-3 w-3" />
-                  <span>{isWebSocketRequest ? "WebSocket Message" : (isGraphqlBody ? "GraphQL Request" : isTableBody ? "Form Request" : isFileBody ? "Binary/File Upload" : isJsonBody ? "JSON Highlight" : "Plain Editor")}</span>
+                  <span>{isWebSocketRequest ? "WebSocket Message" : isSocketIoRequest ? "Socket.IO Payload" : (isGraphqlBody ? "GraphQL Request" : isTableBody ? "Form Request" : isFileBody ? "Binary/File Upload" : isJsonBody ? "JSON Highlight" : "Plain Editor")}</span>
                 </div>
               </div>
-              {isWebSocketRequest ? (
+              {isWebSocketRequest || isSocketIoRequest ? (
                 <Button variant="outline" size="sm" className="h-8 px-2.5 text-[11px]" type="button" onClick={onWebSocketSend} disabled={!activeWsState.connected}>
                   Send
                 </Button>
@@ -1582,6 +1786,10 @@ export function RequestPane({
             ) : null}
           </div>
           )
+        ) : null}
+
+        {activeTab === "Events" && isSocketIoRequest ? (
+          <SocketIoEventsPanel state={state} onChange={onChange} />
         ) : null}
 
         {activeTab === "Auth" ? (
