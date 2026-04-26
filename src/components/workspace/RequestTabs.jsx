@@ -18,15 +18,21 @@ export function RequestTabs({
       {requestTabs.map((request) => (
         (() => {
           const isWebSocket = request.requestMode === REQUEST_MODES.WEBSOCKET;
+          const isGraphql = request.requestMode === REQUEST_MODES.GRAPHQL
+            || request.bodyType === "graphql";
           const isGrpc = request.requestMode === REQUEST_MODES.GRPC
             || Boolean(String(request.grpcMethodPath || "").trim())
             || Boolean(String(request.grpcProtoFilePath || "").trim())
             || (Array.isArray(request.headers) && request.headers.some((row) => String(row?.key || "").toLowerCase() === "content-type" && String(row?.value || "").toLowerCase().includes("application/grpc")));
 
-          const displayMethod = isWebSocket ? "WS" : (isGrpc ? "gRPC" : request.method);
+          const displayMethod = isWebSocket
+            ? "WS"
+            : (isGrpc ? "gRPC" : (isGraphql ? "GQL" : request.method));
           const methodTone = isWebSocket
             ? "text-amber-300 bg-amber-500/15"
-            : (isGrpc ? "text-cyan-300 bg-cyan-500/15" : getMethodTone(request.method));
+            : (isGrpc
+              ? "text-cyan-300 bg-cyan-500/15"
+              : (isGraphql ? "text-fuchsia-300 bg-fuchsia-500/15" : getMethodTone(request.method)));
           return (
             <button
               key={request.name}
