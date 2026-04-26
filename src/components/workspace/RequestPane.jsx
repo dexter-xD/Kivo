@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card.jsx";
 import { Input } from "@/components/ui/input.jsx";
 import { OAuth2Panel } from "@/components/workspace/OAuth2Panel.jsx";
 import { formatGraphqlText, formatJsonText } from "@/lib/formatters.js";
-import { getMethodTone, requestBodyModes } from "@/lib/http-ui.js";
+import { buildUrlWithParams, getMethodTone, requestBodyModes } from "@/lib/http-ui.js";
 import { listGrpcProtoFilesInDirectory, parseGrpcProtoFile } from "@/lib/http-client.js";
 import { REQUEST_MODES } from "@/lib/workspace-store.js";
 import { cn } from "@/lib/utils.js";
@@ -21,6 +21,69 @@ const webSocketBodyModes = [
   { value: "json", label: "JSON" },
   { value: "text", label: "Raw" }
 ];
+
+function toWebSocketUrl(rawUrl) {
+  const trimmed = String(rawUrl ?? "").trim();
+  if (!trimmed) return "";
+
+  if (/^wss?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed.replace(/^http/i, "ws");
+  }
+
+  return `wss://${trimmed}`;
+}
+
+function appendEnabledQueryParams(rawUrl, queryParams = []) {
+  if (!rawUrl) return "";
+
+  try {
+    const parsed = new URL(rawUrl);
+    queryParams.forEach((row) => {
+      if (row?.enabled && String(row.key || "").trim()) {
+        parsed.searchParams.append(String(row.key).trim(), String(row.value || ""));
+      }
+    });
+    return parsed.toString();
+  } catch {
+    return rawUrl;
+  }
+}
+
+function buildSsePreviewUrl(rawUrl, queryParams = []) {
+  const trimmed = String(rawUrl ?? "").trim();
+  if (!trimmed) return "";
+
+  const normalized = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  return appendEnabledQueryParams(normalized, queryParams);
+}
+
+function buildWebSocketPreviewUrl(rawUrl, queryParams = []) {
+  const baseUrl = toWebSocketUrl(rawUrl);
+  return appendEnabledQueryParams(baseUrl, queryParams);
+}
+
+function buildSocketIoPreviewUrl(rawUrl, queryParams = []) {
+  const baseUrl = buildWebSocketPreviewUrl(rawUrl, queryParams);
+  if (!baseUrl) return "";
+
+  try {
+    const parsed = new URL(baseUrl);
+    if (!parsed.pathname || parsed.pathname === "/") {
+      parsed.pathname = "/socket.io/";
+    }
+    if (!parsed.searchParams.has("EIO")) {
+      parsed.searchParams.set("EIO", "4");
+    }
+    parsed.searchParams.set("transport", "websocket");
+    return parsed.toString();
+  } catch {
+    return baseUrl;
+  }
+}
 
 function SseHeadersPanel({ headers, onHeadersChange }) {
   const systemHeaders = [
@@ -1283,6 +1346,18 @@ export function RequestPane({
     const selectedId = String(state.socketIoSelectedEventId || "");
     return socketIoEvents.find((event) => event.id === selectedId) || socketIoEvents[0] || null;
   }, [isSocketIoRequest, socketIoEvents, state.socketIoSelectedEventId]);
+  const urlPreview = useMemo(() => {
+    if (isSocketIoRequest) {
+      return buildSocketIoPreviewUrl(state.url, state.queryParams);
+    }
+    if (isWebSocketRequest) {
+      return buildWebSocketPreviewUrl(state.url, state.queryParams);
+    }
+    if (isSseRequest) {
+      return buildSsePreviewUrl(state.url, state.queryParams);
+    }
+    return buildUrlWithParams(state.url, state.queryParams);
+  }, [isSocketIoRequest, isWebSocketRequest, isSseRequest, state.url, state.queryParams]);
 
   useEffect(() => {
     const requestKey = `${workspaceName || ""}::${collectionName || ""}::${state.name || ""}`;
@@ -1935,7 +2010,7 @@ export function RequestPane({
           <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] text-[12px]">
             <div className="border-b border-border/20 px-3 py-3">
               <div className="mb-1 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">URL Preview</div>
-              <div className="bg-transparent px-3 py-2 text-foreground">{state.url}</div>
+              <div className="bg-transparent px-3 py-2 text-foreground">{urlPreview || state.url}</div>
             </div>
             <TableEditor rows={state.queryParams} onChange={onParamsChange} title="Query Parameters" addLabel="Add" />
           </div>
