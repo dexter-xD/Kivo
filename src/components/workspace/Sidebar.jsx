@@ -41,6 +41,8 @@ const IMPORT_EXPORT_FORMATS = [
   { value: "bruno", label: "Bruno (YAML)", extension: "yml" },
 ];
 
+const SUPPORTED_IMPORT_FORMATS_LABEL = "Supported formats: Postman, OpenAPI 3.0, Swagger 2.0, Bruno (JSON/YAML).";
+
 const CURL_IMPORT_TARGETS = [
   { value: REQUEST_MODES.HTTP, label: "HTTP" },
   { value: REQUEST_MODES.GRAPHQL, label: "GraphQL" }
@@ -127,6 +129,9 @@ function ImportExportModal({ open: isOpen, mode, scope, targetName, defaultFileN
           <div>
             <h3 className="text-[17px] font-semibold text-foreground">{modeLabel} {scopeLabel}</h3>
             <p className="text-[12px] text-muted-foreground">{targetName || `Selected ${scopeLabel.toLowerCase()}`}</p>
+            {mode === "import" ? (
+              <p className="mt-1 text-[11px] text-muted-foreground">{SUPPORTED_IMPORT_FORMATS_LABEL}</p>
+            ) : null}
           </div>
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}><X className="h-4 w-4" /></Button>
         </div>
