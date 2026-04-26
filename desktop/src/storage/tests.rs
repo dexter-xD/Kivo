@@ -4,8 +4,9 @@ use std::path::Path;
 use tempfile::TempDir;
 
 use super::{
-    fs_get_env_vars, fs_load_workspaces, fs_save_collection_config, fs_save_env_vars,
-    fs_save_workspaces, load_collection_config_from_path, parse_env_file_ordered, sanitize_name,
+    build_export_value, fs_get_env_vars, fs_load_workspaces, fs_save_collection_config,
+    fs_save_env_vars, fs_save_workspaces, load_collection_config_from_path,
+    parse_collection_content, parse_env_file_ordered, sanitize_name,
     write_env_file, AuthRecord, CollectionConfig, CollectionRecord, CollectionScripts, EnvVar,
     KeyValueRow, OAuthConfig, RequestRecord, RequestTextOrJson, ResponseMeta, SavedResponse,
     WorkspaceRecord,
@@ -50,6 +51,191 @@ fn make_request(name: &str) -> RequestRecord {
         active_response_tab: "Body".to_string(),
         response_body_view: "JSON".to_string(),
         last_response: None,
+    }
+}
+
+#[cfg(test)]
+mod protocol_and_import_export_tests {
+    use super::*;
+
+    #[test]
+    fn request_modes_roundtrip_for_all_protocol_types() {
+        let dir = TempDir::new().unwrap();
+
+        let mut http_req = make_request("HTTP request");
+        http_req.request_mode = "http".to_string();
+        http_req.method = "GET".to_string();
+
+        let mut graphql_req = make_request("GraphQL request");
+        graphql_req.request_mode = "graphql".to_string();
+        graphql_req.method = "POST".to_string();
+        graphql_req.body_type = "graphql".to_string();
+        graphql_req.body = RequestTextOrJson::Text("query { health }".to_string());
+
+        let mut grpc_req = make_request("gRPC request");
+        grpc_req.request_mode = "grpc".to_string();
+        grpc_req.method = "POST".to_string();
+        grpc_req.grpc_method_path = "/book.BookService/GetBook".to_string();
+
+        let mut ws_req = make_request("WebSocket request");
+        ws_req.request_mode = "websocket".to_string();
+        ws_req.method = "GET".to_string();
+        ws_req.url = "ws://127.0.0.1:4012".to_string();
+
+        let mut sse_req = make_request("SSE request");
+        sse_req.request_mode = "sse".to_string();
+        sse_req.method = "GET".to_string();
+        sse_req.url = "http://127.0.0.1:4013/events".to_string();
+
+        let mut socketio_req = make_request("Socket.IO request");
+        socketio_req.request_mode = "socketio".to_string();
+        socketio_req.method = "GET".to_string();
+        socketio_req.url = "ws://127.0.0.1:4014".to_string();
+
+        let requests = vec![http_req, graphql_req, grpc_req, ws_req, sse_req, socketio_req];
+        fs_save_workspaces(dir.path(), &[ws("ws", vec![col("protocols", requests)])]).unwrap();
+
+        let loaded = fs_load_workspaces(dir.path()).unwrap();
+        let loaded_requests = &loaded[0].collections[0].requests;
+        let loaded_modes: Vec<&str> = loaded_requests
+            .iter()
+            .map(|request| request.request_mode.as_str())
+            .collect();
+
+        assert!(loaded_modes.contains(&"http"));
+        assert!(loaded_modes.contains(&"graphql"));
+        assert!(loaded_modes.contains(&"grpc"));
+        assert!(loaded_modes.contains(&"websocket"));
+        assert!(loaded_modes.contains(&"sse"));
+        assert!(loaded_modes.contains(&"socketio"));
+    }
+
+    #[test]
+    fn parse_collection_content_detects_postman() {
+        let content = r#"
+        {
+          "info": { "name": "Postman Import" },
+          "item": [
+            {
+              "name": "List users",
+              "request": {
+                "method": "GET",
+                "url": "https://api.example.com/users?limit=10",
+                "header": [{ "key": "Accept", "value": "application/json" }]
+              }
+            }
+          ]
+        }
+        "#;
+
+        let parsed = parse_collection_content(content).unwrap();
+        assert_eq!(parsed.detected_format, "postman");
+        assert_eq!(parsed.collection.requests.len(), 1);
+        assert_eq!(parsed.collection.requests[0].method, "GET");
+        assert_eq!(parsed.collection.requests[0].query_params.len(), 1);
+    }
+
+    #[test]
+    fn parse_collection_content_detects_openapi_and_swagger() {
+        let openapi = r#"
+        {
+          "openapi": "3.0.0",
+          "info": { "title": "Users API" },
+          "paths": {
+            "/users": {
+              "get": { "summary": "List users" },
+              "post": { "operationId": "createUser" }
+            }
+          }
+        }
+        "#;
+
+        let swagger = r#"
+        {
+          "swagger": "2.0",
+          "info": { "title": "Legacy API" },
+          "paths": {
+            "/health": {
+              "get": { "summary": "Health" }
+            }
+          }
+        }
+        "#;
+
+        let openapi_parsed = parse_collection_content(openapi).unwrap();
+        assert_eq!(openapi_parsed.detected_format, "openapi3");
+        assert_eq!(openapi_parsed.collection.requests.len(), 2);
+
+        let swagger_parsed = parse_collection_content(swagger).unwrap();
+        assert_eq!(swagger_parsed.detected_format, "swagger2");
+        assert_eq!(swagger_parsed.collection.requests.len(), 1);
+    }
+
+    #[test]
+    fn parse_collection_content_detects_bruno() {
+        let content = r#"
+        {
+          "name": "Bruno Import",
+          "items": [
+            {
+              "type": "http",
+              "name": "Ping",
+              "method": "GET",
+              "url": "https://api.example.com/ping"
+            },
+            {
+              "type": "graphql",
+              "name": "HealthQuery",
+              "graphql": {
+                "url": "https://api.example.com/graphql",
+                "method": "POST",
+                "body": { "query": "query { health }" }
+              }
+            }
+          ]
+        }
+        "#;
+
+        let parsed = parse_collection_content(content).unwrap();
+        assert_eq!(parsed.detected_format, "bruno");
+        assert_eq!(parsed.collection.requests.len(), 2);
+        assert_eq!(parsed.collection.requests[1].body_type, "graphql");
+    }
+
+    #[test]
+    fn build_export_value_supports_all_formats() {
+        let mut http_req = make_request("List users");
+        http_req.method = "GET".to_string();
+        http_req.url = "https://api.example.com/users".to_string();
+
+        let mut graphql_req = make_request("Health query");
+        graphql_req.request_mode = "graphql".to_string();
+        graphql_req.method = "POST".to_string();
+        graphql_req.body_type = "graphql".to_string();
+        graphql_req.url = "https://api.example.com/graphql".to_string();
+        graphql_req.body = RequestTextOrJson::Text("query { health }".to_string());
+
+        let requests = vec![http_req, graphql_req];
+
+        let postman = build_export_value("postman", "Export Test", &requests).unwrap();
+        assert!(postman.get("item").is_some());
+
+        let openapi = build_export_value("openapi3.0", "Export Test", &requests).unwrap();
+        assert_eq!(openapi.get("openapi").and_then(|v| v.as_str()), Some("3.0.0"));
+
+        let swagger = build_export_value("swagger2.0", "Export Test", &requests).unwrap();
+        assert_eq!(swagger.get("swagger").and_then(|v| v.as_str()), Some("2.0"));
+
+        let bruno = build_export_value("bruno", "Export Test", &requests).unwrap();
+        assert_eq!(bruno.get("opencollection").and_then(|v| v.as_str()), Some("1.0.0"));
+    }
+
+    #[test]
+    fn export_format_aliases_are_normalized() {
+        assert_eq!(super::super::export::normalize_export_format("openapi"), "openapi3.0");
+        assert_eq!(super::super::export::normalize_export_format("swagger"), "swagger2.0");
+        assert_eq!(super::super::export::normalize_export_format("yaml"), "bruno");
+        assert_eq!(super::super::export::normalize_export_format("postman"), "postman");
     }
 }
 
